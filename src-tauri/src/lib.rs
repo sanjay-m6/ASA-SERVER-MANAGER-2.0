@@ -1,3 +1,7 @@
+// Allow dead code for placeholder features that will be implemented later
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 mod commands;
 mod db;
 mod models;

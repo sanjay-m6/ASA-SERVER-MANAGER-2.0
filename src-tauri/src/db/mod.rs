@@ -65,7 +65,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_connection(&self) -> std::sync::LockResult<std::sync::MutexGuard<Connection>> {
+    pub fn get_connection(&self) -> std::sync::LockResult<std::sync::MutexGuard<'_, Connection>> {
         self.conn.lock()
     }
 

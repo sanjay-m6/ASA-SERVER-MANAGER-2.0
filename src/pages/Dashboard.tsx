@@ -17,7 +17,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   const handleCopyIp = (port: number) => {
-    // Assuming localhost for local servers, or system IP if available
+    // Use localhost for local servers
     const ip = '127.0.0.1';
     const address = `${ip}:${port}`;
     navigator.clipboard.writeText(address);
@@ -41,7 +41,7 @@ export default function Dashboard() {
             time: timeStr,
             cpu: info.cpuUsage,
             memory: (info.ramUsage / info.ramTotal) * 100,
-            players: servers.reduce((acc, s) => acc + (s.status === 'running' ? 1 : 0), 0) // Mock player count for now based on running servers
+            players: 0 // TODO: Implement real player count via RCON/Query
           };
 
           const newHistory = [...prev, newPoint];

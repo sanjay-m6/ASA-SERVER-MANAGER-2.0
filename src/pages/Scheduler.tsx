@@ -75,40 +75,9 @@ export default function Scheduler() {
         }
     }, [servers, selectedServerId]);
 
-    // Mock tasks for demo
+    // Load tasks (TODO: Implement persistence)
     useEffect(() => {
-        setTasks([
-            {
-                id: 1,
-                serverId: 1,
-                taskType: 'restart',
-                cronExpression: '0 */6 * * *',
-                preWarningMinutes: 5,
-                enabled: true,
-                lastRun: '2024-01-02T12:00:00',
-                nextRun: '2024-01-02T18:00:00',
-            },
-            {
-                id: 2,
-                serverId: 1,
-                taskType: 'backup',
-                cronExpression: '0 0 * * *',
-                preWarningMinutes: 0,
-                enabled: true,
-                lastRun: '2024-01-02T00:00:00',
-                nextRun: '2024-01-03T00:00:00',
-            },
-            {
-                id: 3,
-                serverId: 1,
-                taskType: 'destroy-wild-dinos',
-                cronExpression: '0 */12 * * *',
-                preWarningMinutes: 2,
-                enabled: false,
-                lastRun: '2024-01-01T12:00:00',
-                nextRun: '2024-01-02T00:00:00',
-            },
-        ]);
+        setTasks([]);
     }, []);
 
     const toggleTask = (taskId: number) => {

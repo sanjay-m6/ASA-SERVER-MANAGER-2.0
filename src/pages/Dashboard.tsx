@@ -347,9 +347,9 @@ export default function Dashboard() {
                     </>
                   ) : null}
 
-                  {/* Status Badge */}
+                  {/* Status Badge with Reachability */}
                   <span className={cn(
-                    'px-2.5 py-1 rounded-lg text-xs font-medium border ml-2',
+                    'px-2.5 py-1 rounded-lg text-xs font-medium border ml-2 flex items-center gap-1.5',
                     server.status === 'running' && 'bg-green-500/10 text-green-400 border-green-500/20',
                     server.status === 'stopped' && 'bg-slate-500/10 text-slate-400 border-slate-500/20',
                     server.status === 'crashed' && 'bg-red-500/10 text-red-400 border-red-500/20',
@@ -357,6 +357,11 @@ export default function Dashboard() {
                     server.status === 'updating' && 'bg-blue-500/10 text-blue-400 border-blue-500/20'
                   )}>
                     {server.status.toUpperCase()}
+                    {server.status === 'running' && server.reachability && (
+                      <span className="opacity-75 font-normal">
+                        | {server.reachability === 'Public' ? 'Public' : 'LAN'}
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>

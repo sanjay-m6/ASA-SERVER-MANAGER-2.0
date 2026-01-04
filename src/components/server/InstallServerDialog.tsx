@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
     X, Folder, Download, CheckCircle, AlertCircle, Loader2,
     Server, MapPin, Settings, Zap, ArrowRight, ArrowLeft,
-    HardDrive, Network, Shield, Terminal, ChevronDown, ChevronUp, Globe
+    HardDrive, Network, Shield, Terminal, ChevronDown, ChevronUp, Globe,
+    Copy, ArrowDownToLine, Clock
 } from 'lucide-react';
 import { useServerStore } from '../../stores/serverStore';
 import { installServer, InstallServerParams, selectFolder } from '../../utils/tauri';
@@ -68,6 +69,13 @@ export default function InstallServerDialog({ onClose }: Props) {
     const [consoleLogs, setConsoleLogs] = useState<ConsoleOutput[]>([]);
     const [showConsole, setShowConsole] = useState(true);
     const consoleRef = useRef<HTMLDivElement>(null);
+    const dialogRef = useRef<HTMLDivElement>(null);
+
+    // New states for enhanced UX
+    const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+    const [showTimestamps, setShowTimestamps] = useState(true);
+    const [stepDirection, setStepDirection] = useState<'forward' | 'backward'>('forward');
+    const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
 
     const [formData, setFormData] = useState<InstallServerParams>({
         serverType: 'ASA' as ServerType,
@@ -123,17 +131,57 @@ export default function InstallServerDialog({ onClose }: Props) {
     useEffect(() => {
         if (!isInstalling) return;
         const unlisten = listen<ConsoleOutput>('install-console', (event) => {
-            setConsoleLogs(prev => [...prev.slice(-100), event.payload]); // Keep last 100 lines
+            setConsoleLogs(prev => [...prev.slice(-200), event.payload]); // Keep last 200 lines
         });
         return () => { unlisten.then(fn => fn()); };
     }, [isInstalling]);
 
-    // Auto-scroll console to bottom
+    // Auto-scroll console to bottom (only when auto-scroll is enabled)
     useEffect(() => {
-        if (consoleRef.current && showConsole) {
+        if (consoleRef.current && showConsole && isAutoScrollEnabled) {
             consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
         }
-    }, [consoleLogs, showConsole]);
+    }, [consoleLogs, showConsole, isAutoScrollEnabled]);
+
+    // Detect scroll position for scroll-to-bottom button
+    const handleConsoleScroll = useCallback(() => {
+        if (!consoleRef.current) return;
+        const { scrollTop, scrollHeight, clientHeight } = consoleRef.current;
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 50;
+        setShowScrollToBottom(!isNearBottom);
+        setIsAutoScrollEnabled(isNearBottom);
+    }, []);
+
+    // Scroll to bottom function
+    const scrollToBottom = useCallback(() => {
+        if (consoleRef.current) {
+            consoleRef.current.scrollTo({
+                top: consoleRef.current.scrollHeight,
+                behavior: 'smooth'
+            });
+            setIsAutoScrollEnabled(true);
+        }
+    }, []);
+
+    // Copy logs to clipboard
+    const copyLogsToClipboard = useCallback(() => {
+        const logText = consoleLogs.map(log =>
+            showTimestamps ? `[${log.timestamp}] ${log.line}` : log.line
+        ).join('\n');
+        navigator.clipboard.writeText(logText);
+        toast.success('Logs copied to clipboard!');
+    }, [consoleLogs, showTimestamps]);
+
+    // Keyboard accessibility - Escape to close, Enter to proceed
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !isInstalling) {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isInstalling, onClose]);
 
     const handleSelectFolder = async () => {
         try {
@@ -179,58 +227,69 @@ export default function InstallServerDialog({ onClose }: Props) {
     };
 
     const nextStep = () => {
+        setStepDirection('forward');
         if (step < 4) setStep(step + 1);
         else handleInstall();
     };
 
     const prevStep = () => {
+        setStepDirection('backward');
         if (step > 1) setStep(step - 1);
         else onClose();
     };
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
-            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 border border-slate-700/50 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl">
-
-                {/* Header with Steps */}
-                <div className="relative">
+        <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="install-dialog-title"
+            aria-describedby="install-dialog-description"
+        >
+            <div
+                ref={dialogRef}
+                className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 border border-slate-700/50 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl"
+            >
+                {/* Header with Steps - Fixed at top */}
+                <div className="relative flex-shrink-0">
                     {/* Close Button */}
                     {!isInstalling && (
                         <button
                             onClick={onClose}
-                            className="absolute top-4 right-4 z-10 p-2 hover:bg-white/10 rounded-xl transition-colors"
+                            className="absolute top-4 right-4 z-10 p-2 hover:bg-white/10 rounded-xl transition-all duration-200 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/20"
+                            aria-label="Close dialog"
                         >
                             <X className="w-5 h-5 text-slate-400" />
                         </button>
                     )}
 
-                    {/* Map Preview Banner */}
+                    {/* Map Preview Banner - Compact on small screens */}
                     <div
-                        className="h-32 relative overflow-hidden"
+                        className="h-24 sm:h-32 relative overflow-hidden transition-all duration-300"
                         style={{
                             background: `linear-gradient(135deg, ${selectedMap.color}30 0%, ${selectedMap.color}10 50%, transparent 100%)`
                         }}
                     >
-                        <div className="absolute inset-0 flex items-center justify-between px-8">
-                            <div className="flex items-center gap-4">
+                        <div className="absolute inset-0 flex items-center justify-between px-4 sm:px-8">
+                            <div className="flex items-center gap-3 sm:gap-4">
                                 <div
-                                    className="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl shadow-lg"
+                                    className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center text-2xl sm:text-4xl shadow-lg transition-all duration-200 hover:scale-105"
                                     style={{ backgroundColor: `${selectedMap.color}30` }}
                                 >
                                     {selectedMap.icon}
                                 </div>
                                 <div>
-                                    <h2 className="text-2xl font-bold text-white">Deploy New Server</h2>
-                                    <p className="text-slate-400">{selectedMap.name} • {selectedMap.description}</p>
+                                    <h2 id="install-dialog-title" className="text-lg sm:text-2xl font-bold text-white">Deploy New Server</h2>
+                                    <p id="install-dialog-description" className="text-sm sm:text-base text-slate-400">{selectedMap.name} • {selectedMap.description}</p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Step Indicators */}
+                    {/* Step Indicators - Compact on small screens */}
                     {!isInstalling && (
-                        <div className="flex justify-center -mt-6 relative z-10 px-8">
-                            <div className="bg-slate-800/90 backdrop-blur-sm rounded-2xl p-2 flex gap-2 border border-slate-700/50">
+                        <div className="flex justify-center -mt-4 sm:-mt-6 relative z-10 px-4 sm:px-8">
+                            <div className="bg-slate-800/90 backdrop-blur-sm rounded-xl sm:rounded-2xl p-1.5 sm:p-2 flex gap-1 sm:gap-2 border border-slate-700/50">
                                 {STEPS.map((s) => {
                                     const Icon = s.icon;
                                     const isActive = step === s.id;
@@ -238,29 +297,36 @@ export default function InstallServerDialog({ onClose }: Props) {
                                     return (
                                         <button
                                             key={s.id}
-                                            onClick={() => s.id < step && setStep(s.id)}
+                                            onClick={() => {
+                                                if (s.id < step) {
+                                                    setStepDirection('backward');
+                                                    setStep(s.id);
+                                                }
+                                            }}
                                             disabled={s.id > step}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${isActive
-                                                ? 'bg-white/10 text-white'
+                                            aria-label={`${s.title} - ${isCompleted ? 'Completed' : isActive ? 'Current step' : 'Not yet available'}`}
+                                            aria-current={isActive ? 'step' : undefined}
+                                            className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-all duration-300 ${isActive
+                                                ? 'bg-white/10 text-white scale-105'
                                                 : isCompleted
-                                                    ? 'text-emerald-400 hover:bg-white/5'
+                                                    ? 'text-emerald-400 hover:bg-white/5 hover:scale-102'
                                                     : 'text-slate-500'
                                                 }`}
                                         >
-                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActive
-                                                ? 'bg-white/10'
+                                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-md sm:rounded-lg flex items-center justify-center transition-all duration-300 ${isActive
+                                                ? 'bg-white/10 animate-pulse'
                                                 : isCompleted
                                                     ? 'bg-emerald-500/20'
                                                     : 'bg-slate-700/50'
                                                 }`}>
                                                 {isCompleted ? (
-                                                    <CheckCircle className="w-4 h-4" />
+                                                    <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
                                                 ) : (
-                                                    <Icon className="w-4 h-4" />
+                                                    <Icon className="w-3 h-3 sm:w-4 sm:h-4" />
                                                 )}
                                             </div>
-                                            <div className="hidden sm:block text-left">
-                                                <div className="text-sm font-medium">{s.title}</div>
+                                            <div className="hidden md:block text-left">
+                                                <div className="text-xs sm:text-sm font-medium">{s.title}</div>
                                                 <div className="text-xs opacity-60">{s.description}</div>
                                             </div>
                                         </button>
@@ -271,406 +337,465 @@ export default function InstallServerDialog({ onClose }: Props) {
                     )}
                 </div>
 
-                {/* Content Area */}
-                <div className="p-8">
-                    {/* Step 1: Map Selection */}
-                    {step === 1 && !isInstalling && (
-                        <div className="space-y-6">
-                            <div className="text-center mb-6">
-                                <h3 className="text-xl font-bold text-white">Choose Your Map</h3>
-                                <p className="text-slate-400 mt-1">Select the world you want to explore</p>
+                {/* Content Area - Scrollable */}
+                <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
+                    <div
+                        className={`p-4 sm:p-8 transition-all duration-300 ease-out ${stepDirection === 'forward' ? 'animate-slide-in-right' : 'animate-slide-in-left'
+                            }`}
+                        key={step} // Re-trigger animation on step change
+                    >
+                        {/* Screen reader announcement for progress */}
+                        {progress && (
+                            <div role="status" aria-live="polite" className="sr-only">
+                                {progress.isComplete
+                                    ? 'Server installation complete!'
+                                    : progress.isError
+                                        ? `Installation failed: ${progress.message}`
+                                        : `Installing: ${Math.round(progress.progress)}% - ${progress.message}`
+                                }
                             </div>
-
-                            {/* Released Maps */}
-                            <div>
-                                <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                    <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-                                    Official Maps
-                                </h4>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    {MAPS_ASA.released.map((map) => (
-                                        <button
-                                            key={map.id}
-                                            onClick={() => setFormData({ ...formData, mapName: map.id })}
-                                            className={`p-4 rounded-xl border-2 transition-all text-left ${formData.mapName === map.id
-                                                ? 'border-white/30 bg-white/10'
-                                                : 'border-slate-700/50 bg-slate-800/30 hover:border-slate-600'
-                                                }`}
-                                        >
-                                            <div className="text-2xl mb-2">{map.icon}</div>
-                                            <div className="font-semibold text-white text-sm">{map.name}</div>
-                                            <div className="text-xs text-slate-500 mt-1">{map.description}</div>
-                                        </button>
-                                    ))}
+                        )}
+                        {/* Step 1: Map Selection */}
+                        {step === 1 && !isInstalling && (
+                            <div className="space-y-6">
+                                <div className="text-center mb-6">
+                                    <h3 className="text-xl font-bold text-white">Choose Your Map</h3>
+                                    <p className="text-slate-400 mt-1">Select the world you want to explore</p>
                                 </div>
-                            </div>
 
-                            {/* Premium Mod Maps */}
-                            <div>
-                                <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                    <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
-                                    Premium Mod Maps
-                                </h4>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    {MAPS_ASA.premiumMods.map((map) => (
-                                        <button
-                                            key={map.id}
-                                            onClick={() => setFormData({ ...formData, mapName: map.id })}
-                                            className={`p-4 rounded-xl border-2 transition-all text-left ${formData.mapName === map.id
-                                                ? 'border-white/30 bg-white/10'
-                                                : 'border-slate-700/50 bg-slate-800/30 hover:border-slate-600'
-                                                }`}
-                                        >
-                                            <div className="text-2xl mb-2">{map.icon}</div>
-                                            <div className="font-semibold text-white text-sm">{map.name}</div>
-                                            <div className="text-xs text-slate-500 mt-1">{map.description}</div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Custom Map Option */}
-                            <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center">
-                                        <Settings className="w-5 h-5 text-slate-400" />
+                                {/* Released Maps */}
+                                <div>
+                                    <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                        <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                                        Official Maps
+                                    </h4>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        {MAPS_ASA.released.map((map) => (
+                                            <button
+                                                key={map.id}
+                                                onClick={() => setFormData({ ...formData, mapName: map.id })}
+                                                className={`p-4 rounded-xl border-2 transition-all text-left ${formData.mapName === map.id
+                                                    ? 'border-white/30 bg-white/10'
+                                                    : 'border-slate-700/50 bg-slate-800/30 hover:border-slate-600'
+                                                    }`}
+                                            >
+                                                <div className="text-2xl mb-2">{map.icon}</div>
+                                                <div className="font-semibold text-white text-sm">{map.name}</div>
+                                                <div className="text-xs text-slate-500 mt-1">{map.description}</div>
+                                            </button>
+                                        ))}
                                     </div>
-                                    <div className="flex-1">
-                                        <div className="text-sm font-medium text-white">Custom Map</div>
+                                </div>
+
+                                {/* Premium Mod Maps */}
+                                <div>
+                                    <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                        <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
+                                        Premium Mod Maps
+                                    </h4>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        {MAPS_ASA.premiumMods.map((map) => (
+                                            <button
+                                                key={map.id}
+                                                onClick={() => setFormData({ ...formData, mapName: map.id })}
+                                                className={`p-4 rounded-xl border-2 transition-all text-left ${formData.mapName === map.id
+                                                    ? 'border-white/30 bg-white/10'
+                                                    : 'border-slate-700/50 bg-slate-800/30 hover:border-slate-600'
+                                                    }`}
+                                            >
+                                                <div className="text-2xl mb-2">{map.icon}</div>
+                                                <div className="font-semibold text-white text-sm">{map.name}</div>
+                                                <div className="text-xs text-slate-500 mt-1">{map.description}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Custom Map Option */}
+                                <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center">
+                                            <Settings className="w-5 h-5 text-slate-400" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="text-sm font-medium text-white">Custom Map</div>
+                                            <input
+                                                type="text"
+                                                placeholder="Enter custom map name..."
+                                                className="mt-1 w-full bg-transparent border-none text-slate-300 text-sm focus:outline-none placeholder-slate-600"
+                                                onChange={(e) => e.target.value && setFormData({ ...formData, mapName: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 2: Server Details */}
+                        {step === 2 && !isInstalling && (
+                            <div className="space-y-6 max-w-lg mx-auto">
+                                <div className="text-center mb-6">
+                                    <h3 className="text-xl font-bold text-white">Server Details</h3>
+                                    <p className="text-slate-400 mt-1">Give your server a name and location</p>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-2">
+                                            <Server className="w-4 h-4" />
+                                            Server Name
+                                        </label>
                                         <input
                                             type="text"
-                                            placeholder="Enter custom map name..."
-                                            className="mt-1 w-full bg-transparent border-none text-slate-300 text-sm focus:outline-none placeholder-slate-600"
-                                            onChange={(e) => e.target.value && setFormData({ ...formData, mapName: e.target.value })}
+                                            value={formData.name}
+                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                            className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all"
+                                            placeholder="My Awesome Server"
                                         />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Step 2: Server Details */}
-                    {step === 2 && !isInstalling && (
-                        <div className="space-y-6 max-w-lg mx-auto">
-                            <div className="text-center mb-6">
-                                <h3 className="text-xl font-bold text-white">Server Details</h3>
-                                <p className="text-slate-400 mt-1">Give your server a name and location</p>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-2">
-                                        <Server className="w-4 h-4" />
-                                        Server Name
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={formData.name}
-                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                        className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all"
-                                        placeholder="My Awesome Server"
-                                    />
-                                    <p className="text-xs text-slate-500 mt-1">Internal name to organize servers in this app</p>
-                                </div>
-
-                                <div>
-                                    <label className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-2">
-                                        <Globe className="w-4 h-4" />
-                                        Session Name
-                                        <span className="text-xs text-emerald-500 font-normal">(Public)</span>
-                                    </label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={formData.sessionName ?? ''}
-                                            onChange={(e) => setFormData({ ...formData, sessionName: e.target.value })}
-                                            className="flex-1 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 transition-all"
-                                            placeholder={formData.name || "[PvE] The Island - 10x Rates"}
-                                        />
-                                        <button
-                                            onClick={() => setFormData({ ...formData, sessionName: formData.name })}
-                                            className="px-3 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl transition-colors text-xs text-slate-300"
-                                            title="Copy from Server Name"
-                                        >
-                                            ↩️
-                                        </button>
-                                    </div>
-                                    <p className="text-xs text-slate-500 mt-1">🌐 Visible to players in the ARK server browser</p>
-                                </div>
-
-                                <div>
-                                    <label className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-2">
-                                        <HardDrive className="w-4 h-4" />
-                                        Base Installation Folder
-                                    </label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={baseDir}
-                                            onChange={(e) => setBaseDir(e.target.value)}
-                                            className="flex-1 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all"
-                                            placeholder="C:\ARKServers"
-                                        />
-                                        <button
-                                            onClick={handleSelectFolder}
-                                            className="px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl transition-colors"
-                                            title="Select Base Folder"
-                                        >
-                                            <Folder className="w-5 h-5 text-white" />
-                                        </button>
+                                        <p className="text-xs text-slate-500 mt-1">Internal name to organize servers in this app</p>
                                     </div>
 
-                                    {/* Path Preview */}
-                                    <div className="mt-2 p-3 bg-slate-900/50 rounded-lg border border-slate-800 flex items-start gap-2">
-                                        <div className="mt-0.5 text-slate-500">↳</div>
-                                        <div className="text-xs font-mono text-slate-400 break-all">
-                                            Will install to: <span className="text-emerald-400">{formData.installPath}</span>
+                                    <div>
+                                        <label className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-2">
+                                            <Globe className="w-4 h-4" />
+                                            Session Name
+                                            <span className="text-xs text-emerald-500 font-normal">(Public)</span>
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={formData.sessionName ?? ''}
+                                                onChange={(e) => setFormData({ ...formData, sessionName: e.target.value })}
+                                                className="flex-1 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 transition-all"
+                                                placeholder={formData.name || "[PvE] The Island - 10x Rates"}
+                                            />
+                                            <button
+                                                onClick={() => setFormData({ ...formData, sessionName: formData.name })}
+                                                className="px-3 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl transition-colors text-xs text-slate-300"
+                                                title="Copy from Server Name"
+                                            >
+                                                ↩️
+                                            </button>
                                         </div>
+                                        <p className="text-xs text-slate-500 mt-1">🌐 Visible to players in the ARK server browser</p>
                                     </div>
-                                    <p className="text-xs text-slate-500 mt-2">
-                                        A unique folder will be created automatically for this server.
-                                    </p>
-                                </div>
 
-                                {/* PvE/PvP Toggle */}
-                                <div>
-                                    <label className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-3">
-                                        <Shield className="w-4 h-4" />
-                                        Game Mode
-                                    </label>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => setFormData({ ...formData, pveMode: true })}
-                                            className={`flex-1 flex items-center justify-center gap-3 px-4 py-4 rounded-xl border-2 transition-all ${formData.pveMode !== false
-                                                ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
-                                                : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:border-slate-600'
-                                                }`}
-                                        >
-                                            <span className="text-2xl">🌿</span>
-                                            <div className="text-left">
-                                                <div className="font-bold">PvE</div>
-                                                <div className="text-xs opacity-70">Peaceful</div>
-                                            </div>
-                                        </button>
-                                        <button
-                                            onClick={() => setFormData({ ...formData, pveMode: false })}
-                                            className={`flex-1 flex items-center justify-center gap-3 px-4 py-4 rounded-xl border-2 transition-all ${formData.pveMode === false
-                                                ? 'bg-red-500/20 border-red-500 text-red-400'
-                                                : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:border-slate-600'
-                                                }`}
-                                        >
-                                            <span className="text-2xl">⚔️</span>
-                                            <div className="text-left">
-                                                <div className="font-bold">PvP</div>
-                                                <div className="text-xs opacity-70">Combat</div>
-                                            </div>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                                    <div>
+                                        <label className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-2">
+                                            <HardDrive className="w-4 h-4" />
+                                            Base Installation Folder
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={baseDir}
+                                                onChange={(e) => setBaseDir(e.target.value)}
+                                                className="flex-1 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all"
+                                                placeholder="C:\ARKServers"
+                                            />
+                                            <button
+                                                onClick={handleSelectFolder}
+                                                className="px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl transition-colors"
+                                                title="Select Base Folder"
+                                            >
+                                                <Folder className="w-5 h-5 text-white" />
+                                            </button>
+                                        </div>
 
-                    {/* Step 3: Network Configuration */}
-                    {step === 3 && !isInstalling && (
-                        <div className="space-y-6 max-w-lg mx-auto">
-                            <div className="text-center mb-6">
-                                <h3 className="text-xl font-bold text-white">Network Configuration</h3>
-                                <p className="text-slate-400 mt-1">Configure your server ports</p>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-4">
-                                <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                                                <Zap className="w-5 h-5 text-emerald-400" />
-                                            </div>
-                                            <div>
-                                                <div className="font-medium text-white">Game Port</div>
-                                                <div className="text-xs text-slate-500">Main connection port</div>
+                                        {/* Path Preview */}
+                                        <div className="mt-2 p-3 bg-slate-900/50 rounded-lg border border-slate-800 flex items-start gap-2">
+                                            <div className="mt-0.5 text-slate-500">↳</div>
+                                            <div className="text-xs font-mono text-slate-400 break-all">
+                                                Will install to: <span className="text-emerald-400">{formData.installPath}</span>
                                             </div>
                                         </div>
-                                        <input
-                                            type="number"
-                                            value={formData.gamePort}
-                                            onChange={(e) => setFormData({ ...formData, gamePort: parseInt(e.target.value) || 0 })}
-                                            className="w-24 px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white text-center font-mono focus:outline-none focus:ring-2 focus:ring-white/20"
-                                        />
+                                        <p className="text-xs text-slate-500 mt-2">
+                                            A unique folder will be created automatically for this server.
+                                        </p>
                                     </div>
-                                </div>
 
-                                <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                                                <Network className="w-5 h-5 text-blue-400" />
-                                            </div>
-                                            <div>
-                                                <div className="font-medium text-white">Query Port</div>
-                                                <div className="text-xs text-slate-500">Server browser discovery</div>
-                                            </div>
-                                        </div>
-                                        <input
-                                            type="number"
-                                            value={formData.queryPort}
-                                            onChange={(e) => setFormData({ ...formData, queryPort: parseInt(e.target.value) || 0 })}
-                                            className="w-24 px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white text-center font-mono focus:outline-none focus:ring-2 focus:ring-white/20"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                                                <Shield className="w-5 h-5 text-amber-400" />
-                                            </div>
-                                            <div>
-                                                <div className="font-medium text-white">RCON Port</div>
-                                                <div className="text-xs text-slate-500">Remote administration</div>
-                                            </div>
-                                        </div>
-                                        <input
-                                            type="number"
-                                            value={formData.rconPort}
-                                            onChange={(e) => setFormData({ ...formData, rconPort: parseInt(e.target.value) || 0 })}
-                                            className="w-24 px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white text-center font-mono focus:outline-none focus:ring-2 focus:ring-white/20"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-start gap-3">
-                                <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-                                <div className="text-sm text-amber-300/80">
-                                    Make sure these ports are open in your firewall and forwarded on your router.
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Step 4: Installing */}
-                    {(step === 4 || isInstalling) && progress && (
-                        <div className="space-y-6 max-w-lg mx-auto">
-                            {/* Server Card */}
-                            <div
-                                className="p-5 rounded-2xl border"
-                                style={{
-                                    backgroundColor: `${selectedMap.color}08`,
-                                    borderColor: `${selectedMap.color}30`
-                                }}
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div
-                                        className="w-14 h-14 rounded-xl flex items-center justify-center text-3xl"
-                                        style={{ backgroundColor: `${selectedMap.color}20` }}
-                                    >
-                                        {selectedMap.icon}
-                                    </div>
-                                    <div className="flex-1">
-                                        <h4 className="font-bold text-white text-lg">{formData.name}</h4>
-                                        <p className="text-sm text-slate-400">{selectedMap.name}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Progress Indicator */}
-                            <div className="text-center py-8">
-                                {progress.isComplete ? (
-                                    <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-emerald-500/20 mb-4">
-                                        <CheckCircle className="w-12 h-12 text-emerald-400" />
-                                    </div>
-                                ) : progress.isError ? (
-                                    <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-red-500/20 mb-4">
-                                        <AlertCircle className="w-12 h-12 text-red-400" />
-                                    </div>
-                                ) : (
-                                    <div
-                                        className="inline-flex items-center justify-center w-24 h-24 rounded-full mb-4"
-                                        style={{ backgroundColor: `${selectedMap.color}20` }}
-                                    >
-                                        <Loader2
-                                            className="w-12 h-12 animate-spin"
-                                            style={{ color: selectedMap.color }}
-                                        />
-                                    </div>
-                                )}
-
-                                <h3 className="text-xl font-bold text-white">
-                                    {progress.isComplete ? 'Ready to Play!' :
-                                        progress.isError ? 'Installation Failed' :
-                                            'Installing...'}
-                                </h3>
-                                <p className="text-slate-400 mt-2">{progress.message}</p>
-                            </div>
-
-                            {/* Progress Bar */}
-                            {!progress.isError && (
-                                <div>
-                                    <div className="flex justify-between text-sm mb-2">
-                                        <span className="text-slate-400 capitalize">{progress.stage}</span>
-                                        <span className="text-white font-mono">{Math.round(progress.progress)}%</span>
-                                    </div>
-                                    <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full rounded-full transition-all duration-500"
-                                            style={{
-                                                width: `${progress.progress}%`,
-                                                backgroundColor: progress.isComplete ? '#22c55e' : selectedMap.color
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Terminal Console */}
-                            <div className="rounded-xl overflow-hidden border border-slate-700/50 bg-slate-950">
-                                <div className="flex items-center justify-between px-4 py-2 bg-slate-800/50 border-b border-slate-700/50">
-                                    <div className="flex items-center gap-2">
-                                        <Terminal className="w-4 h-4 text-slate-400" />
-                                        <span className="text-sm font-medium text-slate-300">SteamCMD Output</span>
-                                        <span className="text-xs text-slate-500">({consoleLogs.length} lines)</span>
-                                    </div>
-                                    <button
-                                        onClick={() => setShowConsole(!showConsole)}
-                                        className="p-1 hover:bg-white/10 rounded transition-colors"
-                                    >
-                                        {showConsole ? (
-                                            <ChevronUp className="w-4 h-4 text-slate-400" />
-                                        ) : (
-                                            <ChevronDown className="w-4 h-4 text-slate-400" />
-                                        )}
-                                    </button>
-                                </div>
-                                {showConsole && (
-                                    <div
-                                        ref={consoleRef}
-                                        className="h-48 overflow-y-auto p-3 font-mono text-xs leading-relaxed"
-                                    >
-                                        {consoleLogs.length === 0 ? (
-                                            <div className="text-slate-600 italic">Waiting for output...</div>
-                                        ) : (
-                                            consoleLogs.map((log, idx) => (
-                                                <div key={idx} className="flex gap-2">
-                                                    <span className="text-slate-600 flex-shrink-0">[{log.timestamp}]</span>
-                                                    <span className={
-                                                        log.lineType === 'error' ? 'text-red-400' :
-                                                            log.lineType === 'success' ? 'text-emerald-400' :
-                                                                log.lineType === 'warning' ? 'text-amber-400' :
-                                                                    log.lineType === 'progress' ? 'text-sky-400' :
-                                                                        'text-slate-300'
-                                                    }>
-                                                        {log.line}
-                                                    </span>
+                                    {/* PvE/PvP Toggle */}
+                                    <div>
+                                        <label className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-3">
+                                            <Shield className="w-4 h-4" />
+                                            Game Mode
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setFormData({ ...formData, pveMode: true })}
+                                                className={`flex-1 flex items-center justify-center gap-3 px-4 py-4 rounded-xl border-2 transition-all ${formData.pveMode !== false
+                                                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                                                    : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:border-slate-600'
+                                                    }`}
+                                            >
+                                                <span className="text-2xl">🌿</span>
+                                                <div className="text-left">
+                                                    <div className="font-bold">PvE</div>
+                                                    <div className="text-xs opacity-70">Peaceful</div>
                                                 </div>
-                                            ))
-                                        )}
+                                            </button>
+                                            <button
+                                                onClick={() => setFormData({ ...formData, pveMode: false })}
+                                                className={`flex-1 flex items-center justify-center gap-3 px-4 py-4 rounded-xl border-2 transition-all ${formData.pveMode === false
+                                                    ? 'bg-red-500/20 border-red-500 text-red-400'
+                                                    : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:border-slate-600'
+                                                    }`}
+                                            >
+                                                <span className="text-2xl">⚔️</span>
+                                                <div className="text-left">
+                                                    <div className="font-bold">PvP</div>
+                                                    <div className="text-xs opacity-70">Combat</div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 3: Network Configuration */}
+                        {step === 3 && !isInstalling && (
+                            <div className="space-y-6 max-w-lg mx-auto">
+                                <div className="text-center mb-6">
+                                    <h3 className="text-xl font-bold text-white">Network Configuration</h3>
+                                    <p className="text-slate-400 mt-1">Configure your server ports</p>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                                    <Zap className="w-5 h-5 text-emerald-400" />
+                                                </div>
+                                                <div>
+                                                    <div className="font-medium text-white">Game Port</div>
+                                                    <div className="text-xs text-slate-500">Main connection port</div>
+                                                </div>
+                                            </div>
+                                            <input
+                                                type="number"
+                                                value={formData.gamePort}
+                                                onChange={(e) => setFormData({ ...formData, gamePort: parseInt(e.target.value) || 0 })}
+                                                className="w-24 px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white text-center font-mono focus:outline-none focus:ring-2 focus:ring-white/20"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                                    <Network className="w-5 h-5 text-blue-400" />
+                                                </div>
+                                                <div>
+                                                    <div className="font-medium text-white">Query Port</div>
+                                                    <div className="text-xs text-slate-500">Server browser discovery</div>
+                                                </div>
+                                            </div>
+                                            <input
+                                                type="number"
+                                                value={formData.queryPort}
+                                                onChange={(e) => setFormData({ ...formData, queryPort: parseInt(e.target.value) || 0 })}
+                                                className="w-24 px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white text-center font-mono focus:outline-none focus:ring-2 focus:ring-white/20"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                                    <Shield className="w-5 h-5 text-amber-400" />
+                                                </div>
+                                                <div>
+                                                    <div className="font-medium text-white">RCON Port</div>
+                                                    <div className="text-xs text-slate-500">Remote administration</div>
+                                                </div>
+                                            </div>
+                                            <input
+                                                type="number"
+                                                value={formData.rconPort}
+                                                onChange={(e) => setFormData({ ...formData, rconPort: parseInt(e.target.value) || 0 })}
+                                                className="w-24 px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white text-center font-mono focus:outline-none focus:ring-2 focus:ring-white/20"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-start gap-3">
+                                    <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                                    <div className="text-sm text-amber-300/80">
+                                        Make sure these ports are open in your firewall and forwarded on your router.
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 4: Installing */}
+                        {(step === 4 || isInstalling) && progress && (
+                            <div className="space-y-6 max-w-lg mx-auto">
+                                {/* Server Card */}
+                                <div
+                                    className="p-5 rounded-2xl border"
+                                    style={{
+                                        backgroundColor: `${selectedMap.color}08`,
+                                        borderColor: `${selectedMap.color}30`
+                                    }}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div
+                                            className="w-14 h-14 rounded-xl flex items-center justify-center text-3xl"
+                                            style={{ backgroundColor: `${selectedMap.color}20` }}
+                                        >
+                                            {selectedMap.icon}
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className="font-bold text-white text-lg">{formData.name}</h4>
+                                            <p className="text-sm text-slate-400">{selectedMap.name}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Progress Indicator */}
+                                <div className="text-center py-8">
+                                    {progress.isComplete ? (
+                                        <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-emerald-500/20 mb-4">
+                                            <CheckCircle className="w-12 h-12 text-emerald-400" />
+                                        </div>
+                                    ) : progress.isError ? (
+                                        <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-red-500/20 mb-4">
+                                            <AlertCircle className="w-12 h-12 text-red-400" />
+                                        </div>
+                                    ) : (
+                                        <div
+                                            className="inline-flex items-center justify-center w-24 h-24 rounded-full mb-4"
+                                            style={{ backgroundColor: `${selectedMap.color}20` }}
+                                        >
+                                            <Loader2
+                                                className="w-12 h-12 animate-spin"
+                                                style={{ color: selectedMap.color }}
+                                            />
+                                        </div>
+                                    )}
+
+                                    <h3 className="text-xl font-bold text-white">
+                                        {progress.isComplete ? 'Ready to Play!' :
+                                            progress.isError ? 'Installation Failed' :
+                                                'Installing...'}
+                                    </h3>
+                                    <p className="text-slate-400 mt-2">{progress.message}</p>
+                                </div>
+
+                                {/* Progress Bar */}
+                                {!progress.isError && (
+                                    <div>
+                                        <div className="flex justify-between text-sm mb-2">
+                                            <span className="text-slate-400 capitalize">{progress.stage}</span>
+                                            <span className="text-white font-mono">{Math.round(progress.progress)}%</span>
+                                        </div>
+                                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full rounded-full transition-all duration-500"
+                                                style={{
+                                                    width: `${progress.progress}%`,
+                                                    backgroundColor: progress.isComplete ? '#22c55e' : selectedMap.color
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                 )}
+
+                                {/* Terminal Console - Enhanced */}
+                                <div className="rounded-xl overflow-hidden border border-slate-700/50 bg-slate-950">
+                                    <div className="flex items-center justify-between px-3 sm:px-4 py-2 bg-slate-800/50 border-b border-slate-700/50">
+                                        <div className="flex items-center gap-2">
+                                            <Terminal className="w-4 h-4 text-slate-400" />
+                                            <span className="text-xs sm:text-sm font-medium text-slate-300">SteamCMD Output</span>
+                                            <span className="text-xs text-slate-500 hidden sm:inline">({consoleLogs.length} lines)</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            {/* Toggle Timestamps */}
+                                            <button
+                                                onClick={() => setShowTimestamps(!showTimestamps)}
+                                                className={`p-1.5 rounded transition-all ${showTimestamps ? 'bg-white/10 text-slate-300' : 'hover:bg-white/10 text-slate-500'}`}
+                                                title={showTimestamps ? 'Hide timestamps' : 'Show timestamps'}
+                                                aria-label={showTimestamps ? 'Hide timestamps' : 'Show timestamps'}
+                                            >
+                                                <Clock className="w-3.5 h-3.5" />
+                                            </button>
+                                            {/* Copy Logs */}
+                                            <button
+                                                onClick={copyLogsToClipboard}
+                                                className="p-1.5 hover:bg-white/10 rounded transition-all text-slate-400 hover:text-slate-200 disabled:opacity-50"
+                                                title="Copy logs to clipboard"
+                                                aria-label="Copy logs to clipboard"
+                                                disabled={consoleLogs.length === 0}
+                                            >
+                                                <Copy className="w-3.5 h-3.5" />
+                                            </button>
+                                            {/* Toggle Console */}
+                                            <button
+                                                onClick={() => setShowConsole(!showConsole)}
+                                                className="p-1.5 hover:bg-white/10 rounded transition-all"
+                                                aria-label={showConsole ? 'Collapse console' : 'Expand console'}
+                                            >
+                                                {showConsole ? (
+                                                    <ChevronUp className="w-4 h-4 text-slate-400" />
+                                                ) : (
+                                                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {showConsole && (
+                                        <div className="relative">
+                                            <div
+                                                ref={consoleRef}
+                                                onScroll={handleConsoleScroll}
+                                                className="h-32 sm:h-48 overflow-y-auto p-2 sm:p-3 font-mono text-xs leading-relaxed custom-scrollbar"
+                                            >
+                                                {consoleLogs.length === 0 ? (
+                                                    <div className="text-slate-600 italic flex items-center gap-2">
+                                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                                        Waiting for output...
+                                                    </div>
+                                                ) : (
+                                                    consoleLogs.map((log, idx) => (
+                                                        <div key={idx} className="flex gap-2 hover:bg-white/5 px-1 -mx-1 rounded transition-colors">
+                                                            {showTimestamps && (
+                                                                <span className="text-slate-600 flex-shrink-0 text-xs">[{log.timestamp}]</span>
+                                                            )}
+                                                            <span className={
+                                                                log.lineType === 'error' ? 'text-red-400' :
+                                                                    log.lineType === 'success' ? 'text-emerald-400' :
+                                                                        log.lineType === 'warning' ? 'text-amber-400' :
+                                                                            log.lineType === 'progress' ? 'text-sky-400' :
+                                                                                'text-slate-300'
+                                                            }>
+                                                                {log.line}
+                                                            </span>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                            {/* Scroll to Bottom FAB */}
+                                            {showScrollToBottom && consoleLogs.length > 5 && (
+                                                <button
+                                                    onClick={scrollToBottom}
+                                                    className="absolute bottom-2 right-2 p-2 bg-slate-700 hover:bg-slate-600 rounded-full shadow-lg transition-all hover:scale-110"
+                                                    title="Scroll to bottom"
+                                                    aria-label="Scroll to bottom of console"
+                                                >
+                                                    <ArrowDownToLine className="w-4 h-4 text-slate-300" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
 
                 {/* Footer Navigation */}

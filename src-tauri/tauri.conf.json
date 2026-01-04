@@ -34,6 +34,15 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/sanjay-m6/ASA-SERVER-MANAGER-2.0/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
+    }
   }
 }

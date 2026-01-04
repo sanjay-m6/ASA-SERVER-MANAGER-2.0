@@ -197,6 +197,8 @@ impl ServerInstaller {
         );
         self.emit_console("", "info");
 
+        use std::os::windows::process::CommandExt;
+
         // Build the SteamCMD command
         let mut child = Command::new(&steamcmd_exe)
             .args([
@@ -211,6 +213,7 @@ impl ServerInstaller {
             ])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .spawn()
             .map_err(|e| format!("Failed to start SteamCMD: {}", e))?;
 
@@ -262,10 +265,10 @@ impl ServerInstaller {
                     if let Some(progress_str) = line.split("progress:").nth(1) {
                         if let Some(pct) = progress_str.split_whitespace().next() {
                             if let Ok(pct_float) = pct.parse::<f32>() {
-                                let adjusted = 20.0 + (pct_float * 0.7); // Scale to 20-90%
+                                // Use actual percentage from SteamCMD directly
                                 self.emit_progress(
                                     "downloading",
-                                    adjusted,
+                                    pct_float,
                                     &format!("Downloading... {:.1}%", pct_float),
                                 );
                             }

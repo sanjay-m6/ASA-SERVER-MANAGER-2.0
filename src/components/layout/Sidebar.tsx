@@ -1,4 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { getVersion } from '@tauri-apps/api/app';
 import {
   LayoutDashboard,
   Server,
@@ -13,6 +15,7 @@ import {
   Settings as SettingsIcon
 } from 'lucide-react';
 import { cn } from '../../utils/helpers';
+import { useServerStore } from '../../stores/serverStore';
 
 const navigation = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -32,6 +35,17 @@ import logo from '../../assets/logo.png';
 
 export default function Sidebar() {
   const location = useLocation();
+  const [appVersion, setAppVersion] = useState<string>('');
+  const servers = useServerStore((state) => state.servers);
+
+  // Check if any server is running
+  const runningServers = servers.filter((s) => s.status === 'running');
+  const isAnyServerRunning = runningServers.length > 0;
+  const systemStatus = isAnyServerRunning ? 'RUNNING' : 'ONLINE';
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => setAppVersion('?.?.?'));
+  }, []);
 
   return (
     <div className="w-72 glass-panel border-r-0 border-r-white/5 flex flex-col h-screen relative z-50">
@@ -90,13 +104,23 @@ export default function Sidebar() {
         <div className="glass-panel rounded-xl p-4 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border-white/5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-slate-300">System Status</span>
-            <span className="text-xs font-bold text-green-400">ONLINE</span>
+            <span className={cn(
+              "text-xs font-bold",
+              isAnyServerRunning ? "text-cyan-400" : "text-green-400"
+            )}>
+              {systemStatus}
+            </span>
           </div>
           <div className="w-full bg-slate-700/50 rounded-full h-1">
-            <div className="bg-green-500 h-1 rounded-full w-full shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
+            <div className={cn(
+              "h-1 rounded-full w-full",
+              isAnyServerRunning 
+                ? "bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]" 
+                : "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"
+            )}></div>
           </div>
           <div className="mt-3 text-[10px] text-slate-500 text-center font-mono">
-            v2.0.0 • ASA Exclusive
+            v{appVersion} • ASA Exclusive
           </div>
         </div>
       </div>

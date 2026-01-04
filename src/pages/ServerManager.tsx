@@ -6,6 +6,7 @@ import InstallServerDialog from '../components/server/InstallServerDialog';
 import { startServer, stopServer, restartServer, deleteServer, getAllServers, updateServer, startLogWatcher } from '../utils/tauri';
 import toast from 'react-hot-toast';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { getVersion } from '@tauri-apps/api/app';
 
 import { useNavigate } from 'react-router-dom';
 
@@ -22,8 +23,13 @@ export default function ServerManager() {
     const [serverLogs, setServerLogs] = useState<Record<number, string[]>>({});
     const [expandedConsoles, setExpandedConsoles] = useState<Record<number, boolean>>({});
     const consoleRefs = useRef<Record<number, HTMLDivElement | null>>({});
+    const [appVersion, setAppVersion] = useState<string>('');
+
 
     useEffect(() => {
+        // Fetch app version
+        getVersion().then(setAppVersion).catch(() => setAppVersion('?.?.?'));
+        
         // Initial fetch
         getAllServers().then(setServers).catch(console.error);
 
@@ -62,7 +68,7 @@ export default function ServerManager() {
 
     // Auto-start log watcher for running servers (for servers started before app opened)
     const [watchersStarted, setWatchersStarted] = useState<Record<number, boolean>>({});
-    
+
     useEffect(() => {
         servers.forEach(server => {
             if (server.status === 'running' && !watchersStarted[server.id]) {
@@ -230,7 +236,7 @@ export default function ServerManager() {
                                             </div>
                                             <div className="flex items-center gap-1.5">
                                                 <Shield className="w-4 h-4 text-slate-500" />
-                                                <span>v32.1.0</span>
+                                                <span>v{appVersion}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -343,13 +349,13 @@ export default function ServerManager() {
                                                     // Enhanced color coding based on log content
                                                     let colorClass = "text-slate-300";
                                                     let prefixColor = "";
-                                                    
+
                                                     // Extract prefix if present (e.g., "CFCore", "None", "LogNet", etc.)
                                                     const colonIdx = line.indexOf(':');
                                                     const prefix = colonIdx > 0 && colonIdx < 30 ? line.substring(0, colonIdx).trim() : "";
-                                                    
+
                                                     // Error patterns - red
-                                                    if (line.includes("Error") || line.includes("error") || 
+                                                    if (line.includes("Error") || line.includes("error") ||
                                                         line.includes("Failed") || line.includes("failed") ||
                                                         line.includes("Couldn't") || line.includes("No machine id")) {
                                                         colorClass = "text-red-400";
@@ -360,8 +366,8 @@ export default function ServerManager() {
                                                     }
                                                     // Success patterns - green
                                                     else if (line.includes("successfully") || line.includes("Success") ||
-                                                             line.includes("Started") || line.includes("Initialized") ||
-                                                             line.includes("Complete")) {
+                                                        line.includes("Started") || line.includes("Initialized") ||
+                                                        line.includes("Complete")) {
                                                         colorClass = "text-green-400";
                                                     }
                                                     // CFCore (mod system) - cyan
@@ -375,7 +381,7 @@ export default function ServerManager() {
                                                     }
                                                     // Player activity - blue
                                                     else if (line.includes("Player") || line.includes("connected") ||
-                                                             line.includes("joined") || line.includes("disconnected")) {
+                                                        line.includes("joined") || line.includes("disconnected")) {
                                                         colorClass = "text-blue-400";
                                                     }
                                                     // Log prefixes
@@ -387,7 +393,7 @@ export default function ServerManager() {
                                                         prefixColor = "text-emerald-500";
                                                         colorClass = "text-emerald-300";
                                                     }
-                                                    
+
                                                     // Render with prefix highlighting
                                                     if (prefixColor && colonIdx > 0) {
                                                         return (
@@ -397,7 +403,7 @@ export default function ServerManager() {
                                                             </div>
                                                         );
                                                     }
-                                                    
+
                                                     return (
                                                         <div key={idx} className={cn("py-0.5 hover:bg-slate-900/50", colorClass)}>
                                                             {line}

@@ -1,0 +1,30 @@
+﻿
+> ark-server-manager@0.1.0 tauri
+> tauri signer generate
+
+Please enter a password to protect the secret key.
+
+<empty>
+
+<empty>
+Deriving a key from the password in order to encrypt the secret key... done
+
+Your secret key was generated successfully - Keep it secret!
+dW50cnVzdGVkIGNvbW1lbnQ6IHJzaWduIGVuY3J5cHRlZCBzZWNyZXQga2V5ClJXUlRZMEl5YnNleklvTy93UVB3NkE1VFA4eUtNRS8zKzV4bzIvTTI5SVJlTlJVRU8wUUFBQkFBQUFBQUFBQUFBQUlBQUFBQS9mQk45c0JXb2dqYkxDNWhrQzR2OWNCbGlSN3Ztb3cwR1NmNFFoOUdOTGNCYWhiR0lpK01jRDYvbnhQQTNubXlGMSt0emNQaE1lZ2IrRFg5cFFZWXRGVk5teWhneVhBWEg0OTZjKzdPRlM0eWg2SE54YjNsclRtbVUzeDNKdUNCVUk0SGtVbW5PdEE9Cg==
+
+
+Your public key was generated successfully:
+dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDA4QTI1NkMwRjY0REYwRkQKUldUOThFMzJ3RmFpQ0Q2L254UEEzbm15RjErdHpjUGhNZWdiK0RYOXBRWVl0RlZObXloZ3lYQVgK
+
+Add the public key in your tauri.conf.json
+---------------------------
+
+
+Environment variables used to sign:
+`TAURI_SIGNING_PRIVATE_KEY`  Path or String of your private key
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`  Your private key password (optional)
+
+ATTENTION: If you lose your private key OR password, you'll not be able to sign your update package and updates will not work.
+---------------------------
+
+

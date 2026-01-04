@@ -12,7 +12,7 @@ interface UpdateInfo {
 
 export default function UpdateChecker() {
     const [updateAvailable, setUpdateAvailable] = useState<UpdateInfo | null>(null);
-    const [isChecking, setIsChecking] = useState(false);
+    const [_isChecking, setIsChecking] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
@@ -48,10 +48,12 @@ export default function UpdateChecker() {
         setError(null);
 
         try {
+            let downloaded = 0;
             await updateAvailable.update.downloadAndInstall((event) => {
                 if (event.event === 'Progress') {
-                    const progress = (event.data.chunkLength / (event.data.contentLength || 1)) * 100;
-                    setDownloadProgress(prev => Math.min(prev + progress, 100));
+                    downloaded += event.data.chunkLength;
+                    // Estimate progress (we don't always get contentLength)
+                    setDownloadProgress(Math.min((downloaded / 10000000) * 100, 99));
                 }
             });
 

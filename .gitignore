@@ -7,10 +7,28 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+
+# Build outputs
 dist
 dist-ssr
 *.local
+
+# Tauri / Rust
+src-tauri/target
+src-tauri/WixTools
+
+# Sensitive files (keys, credentials)
+*.key
+*.pem
+keys*.txt
+*.env.local
+*.env.*.local
+
+# TypeScript
+*.tsbuildinfo
+tsc_errors.log
 
 # Editor directories and files
 .vscode/*
@@ -22,3 +40,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# OS specific
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# Build scripts (if they contain sensitive data)
+build_with_keys.ps1
+gen_keys*.ps1
+generate_keys.js
+read_*.js
+sanitize_*.js

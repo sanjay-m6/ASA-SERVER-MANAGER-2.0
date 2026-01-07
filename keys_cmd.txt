@@ -1,9 +1,0 @@
-
-> ark-server-manager@0.1.0 tauri
-> tauri signer generate
-
-Please enter a password to protect the secret key.
-
-Terminate batch job (Y/N)?  
-Terminate batch job (Y/N)?  
-Terminate batch job (Y/N)? 

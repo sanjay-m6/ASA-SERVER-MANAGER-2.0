@@ -10,6 +10,7 @@ interface ServerStore {
     updateServerStatus: (serverId: number, status: ServerStatus) => void;
     setActiveServer: (server: Server | null) => void;
     checkReachability: (serverId: number, gamePort: number) => Promise<void>;
+    refreshServers: () => Promise<void>;
 }
 
 export const useServerStore = create<ServerStore>((set) => ({
@@ -56,6 +57,16 @@ export const useServerStore = create<ServerStore>((set) => ({
             }));
         } catch (error) {
             console.error('Failed to check reachability:', error);
+        }
+    },
+
+    refreshServers: async () => {
+        try {
+            const { getAllServers } = await import('../utils/tauri');
+            const servers = await getAllServers();
+            set({ servers });
+        } catch (error) {
+            console.error('Failed to refresh servers:', error);
         }
     }
 }));

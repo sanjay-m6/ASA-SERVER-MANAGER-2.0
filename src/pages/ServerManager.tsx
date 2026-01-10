@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Play, Square, RotateCw, Trash2, Download, Settings, Terminal, Globe, Shield, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Play, Square, RotateCw, Trash2, Download, Settings, Terminal, Globe, Shield, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { useServerStore } from '../stores/serverStore';
 import { cn } from '../utils/helpers';
 import InstallServerDialog from '../components/server/InstallServerDialog';
-import { startServer, stopServer, restartServer, deleteServer, getAllServers, updateServer, startLogWatcher } from '../utils/tauri';
+import CloneOptionsModal from '../components/server/CloneOptionsModal';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { startServer, stopServer, restartServer, deleteServer, getAllServers, updateServer, startLogWatcher, cloneServer, transferSettings, extractSaveData } from '../utils/tauri';
 import toast from 'react-hot-toast';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { getVersion } from '@tauri-apps/api/app';
 
 import { useNavigate } from 'react-router-dom';
+import { Server } from '../types';
 
 interface ServerLogEvent {
     server_id: number;
@@ -24,12 +27,14 @@ export default function ServerManager() {
     const [expandedConsoles, setExpandedConsoles] = useState<Record<number, boolean>>({});
     const consoleRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const [appVersion, setAppVersion] = useState<string>('');
+    const [cloneModalServer, setCloneModalServer] = useState<Server | null>(null);
+    const [deleteConfirmServer, setDeleteConfirmServer] = useState<Server | null>(null);
 
 
     useEffect(() => {
         // Fetch app version
         getVersion().then(setAppVersion).catch(() => setAppVersion('?.?.?'));
-        
+
         // Initial fetch
         getAllServers().then(setServers).catch(console.error);
 
@@ -121,15 +126,13 @@ export default function ServerManager() {
         }
     };
 
-    const handleDeleteServer = async (serverId: number) => {
-        if (!confirm('Are you sure you want to delete this server? This action cannot be undone.')) {
-            return;
-        }
-
+    const confirmDeleteServer = async () => {
+        if (!deleteConfirmServer) return;
         try {
-            await deleteServer(serverId);
-            removeServer(serverId);
+            await deleteServer(deleteConfirmServer.id);
+            removeServer(deleteConfirmServer.id);
             toast.success('Server deleted successfully');
+            setDeleteConfirmServer(null);
         } catch (error) {
             toast.error(`Failed to delete server: ${error}`);
         }
@@ -143,6 +146,41 @@ export default function ServerManager() {
         } catch (error) {
             updateServerStatus(serverId, 'stopped');
             toast.error(`Failed to update server: ${error}`);
+        }
+    };
+
+    const openCloneModal = (server: Server) => {
+        setCloneModalServer(server);
+    };
+
+    const handleCloneServer = async () => {
+        if (!cloneModalServer) return;
+        try {
+            const newServer = await cloneServer(cloneModalServer.id);
+            setServers([...servers, newServer]);
+            toast.success(`Server cloned as "${newServer.name}"`);
+        } catch (error) {
+            toast.error(`Failed to clone server: ${error}`);
+        }
+    };
+
+    const handleTransferSettings = async (targetServerId: number) => {
+        if (!cloneModalServer) return;
+        try {
+            await transferSettings(cloneModalServer.id, targetServerId);
+            toast.success('Settings transferred successfully');
+        } catch (error) {
+            toast.error(`Failed to transfer settings: ${error}`);
+        }
+    };
+
+    const handleExtractData = async (targetServerId: number) => {
+        if (!cloneModalServer) return;
+        try {
+            await extractSaveData(cloneModalServer.id, targetServerId);
+            toast.success('Save data extracted successfully');
+        } catch (error) {
+            toast.error(`Failed to extract save data: ${error}`);
         }
     };
 
@@ -290,7 +328,15 @@ export default function ServerManager() {
                                     </button>
 
                                     <button
-                                        onClick={() => handleDeleteServer(server.id)}
+                                        onClick={() => openCloneModal(server)}
+                                        className="p-2.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 rounded-lg transition-all hover:scale-105 active:scale-95"
+                                        title="Clone / Transfer / Extract"
+                                    >
+                                        <Copy className="w-5 h-5" />
+                                    </button>
+
+                                    <button
+                                        onClick={() => setDeleteConfirmServer(server)}
                                         className="p-2.5 bg-slate-700/30 hover:bg-red-500/20 text-slate-300 hover:text-red-400 border border-slate-600/30 hover:border-red-500/20 rounded-lg transition-all hover:scale-105 active:scale-95"
                                         title="Delete Server"
                                     >
@@ -424,6 +470,30 @@ export default function ServerManager() {
             {showInstallDialog && (
                 <InstallServerDialog onClose={() => setShowInstallDialog(false)} />
             )}
+
+            {/* Clone Options Modal */}
+            {cloneModalServer && (
+                <CloneOptionsModal
+                    isOpen={true}
+                    onClose={() => setCloneModalServer(null)}
+                    sourceServer={cloneModalServer}
+                    allServers={servers}
+                    onCloneServer={handleCloneServer}
+                    onTransferSettings={handleTransferSettings}
+                    onExtractData={handleExtractData}
+                />
+            )}
+
+            {/* Delete Confirmation Dialog */}
+            <ConfirmDialog
+                isOpen={!!deleteConfirmServer}
+                onClose={() => setDeleteConfirmServer(null)}
+                onConfirm={confirmDeleteServer}
+                title="Delete Server"
+                message={`Are you sure you want to delete "${deleteConfirmServer?.name}"? This action cannot be undone.`}
+                confirmText="Delete"
+                variant="danger"
+            />
         </div>
     );
 }

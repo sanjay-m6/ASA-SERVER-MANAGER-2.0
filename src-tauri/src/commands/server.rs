@@ -14,7 +14,7 @@ pub async fn get_all_servers(state: State<'_, AppState>) -> Result<Vec<Server>, 
         .prepare(
             "SELECT id, name, install_path, status, game_port, query_port, rcon_port, 
              max_players, server_password, admin_password, map_name, session_name, 
-             motd, mods, custom_args, rcon_enabled, created_at, last_started 
+             motd, mods, custom_args, rcon_enabled, created_at, last_started, ip_address 
              FROM servers",
         )
         .map_err(|e| e.to_string())?;
@@ -67,6 +67,7 @@ pub async fn get_all_servers(state: State<'_, AppState>) -> Result<Vec<Server>, 
                     .get::<_, String>(9)
                     .unwrap_or_else(|_| "admin123".to_string()),
             },
+            ip_address: row.get(18).ok(),
             created_at: row
                 .get(16)
                 .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339()),
@@ -174,16 +175,298 @@ pub async fn install_server(
             enabled: true,
             password: "admin123".to_string(),
         },
+        ip_address: None,
         created_at: chrono::Utc::now().to_rfc3339(),
         last_started: None,
     })
+}
+
+/// Clone an existing server with offset ports
+#[tauri::command]
+pub async fn clone_server(
+    state: State<'_, AppState>,
+    source_server_id: i64,
+) -> Result<Server, String> {
+    println!("📋 Cloning server {}", source_server_id);
+
+    // Get source server details
+    let (
+        name,
+        install_path,
+        map_name,
+        session_name,
+        game_port,
+        query_port,
+        rcon_port,
+        max_players,
+        server_password,
+        admin_password,
+        ip_address,
+    ) = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db.get_connection().map_err(|e| e.to_string())?;
+
+        conn.query_row(
+            "SELECT name, install_path, map_name, session_name, game_port, query_port, rcon_port,
+             max_players, server_password, admin_password, ip_address FROM servers WHERE id = ?1",
+            [source_server_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, u16>(4)?,
+                    row.get::<_, u16>(5)?,
+                    row.get::<_, u16>(6)?,
+                    row.get::<_, i32>(7)?,
+                    row.get::<_, Option<String>>(8)?,
+                    row.get::<_, String>(9)?,
+                    row.get::<_, Option<String>>(10)?,
+                ))
+            },
+        )
+        .map_err(|e| format!("Source server not found: {}", e))?
+    };
+
+    // Generate new name and paths
+    let new_name = format!("{} (Copy)", name);
+    let source_path = PathBuf::from(&install_path);
+    let new_install_path = source_path.parent().unwrap_or(&source_path).join(format!(
+        "{}_copy",
+        source_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+    ));
+
+    // Offset ports by 10 to avoid conflicts
+    let new_game_port = game_port + 10;
+    let new_query_port = query_port + 10;
+    let new_rcon_port = rcon_port + 10;
+
+    // Create new install directory
+    std::fs::create_dir_all(&new_install_path)
+        .map_err(|e| format!("Failed to create directory: {}", e))?;
+
+    // Copy config files if they exist
+    let source_config_dir = source_path.join("ShooterGame/Saved/Config/WindowsServer");
+    let dest_config_dir = new_install_path.join("ShooterGame/Saved/Config/WindowsServer");
+    if source_config_dir.exists() {
+        std::fs::create_dir_all(&dest_config_dir)
+            .map_err(|e| format!("Failed to create config dir: {}", e))?;
+
+        for file in ["GameUserSettings.ini", "Game.ini"] {
+            let src = source_config_dir.join(file);
+            let dst = dest_config_dir.join(file);
+            if src.exists() {
+                std::fs::copy(&src, &dst).map_err(|e| format!("Failed to copy {}: {}", file, e))?;
+            }
+        }
+    }
+
+    // Insert new server into database
+    let new_id = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db.get_connection().map_err(|e| e.to_string())?;
+
+        conn.execute(
+            "INSERT INTO servers (name, install_path, status, game_port, query_port, rcon_port,
+             max_players, admin_password, map_name, session_name, server_type, server_password, ip_address)
+             VALUES (?1, ?2, 'stopped', ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'ASA', ?10, ?11)",
+            rusqlite::params![
+                new_name,
+                new_install_path.to_string_lossy(),
+                new_game_port,
+                new_query_port,
+                new_rcon_port,
+                max_players,
+                admin_password,
+                map_name,
+                format!("{} (Copy)", session_name),
+                server_password,
+                ip_address
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+
+        conn.last_insert_rowid()
+    };
+
+    println!(
+        "  ✅ Cloned server {} -> {} (ID: {})",
+        source_server_id, new_name, new_id
+    );
+
+    Ok(Server {
+        id: new_id,
+        name: new_name.clone(),
+        install_path: new_install_path,
+        status: ServerStatus::Stopped,
+        ports: ServerPorts {
+            game_port: new_game_port,
+            query_port: new_query_port,
+            rcon_port: new_rcon_port,
+        },
+        config: ServerConfig {
+            max_players,
+            server_password,
+            admin_password: admin_password.clone(),
+            map_name,
+            session_name: format!("{} (Copy)", session_name),
+            motd: None,
+            mods: vec![],
+            custom_args: None,
+        },
+        rcon_config: RconConfig {
+            enabled: true,
+            password: admin_password,
+        },
+        ip_address,
+        created_at: chrono::Utc::now().to_rfc3339(),
+        last_started: None,
+    })
+}
+
+/// Transfer settings (INI files) from one server to another
+#[tauri::command]
+pub async fn transfer_settings(
+    state: State<'_, AppState>,
+    source_server_id: i64,
+    target_server_id: i64,
+) -> Result<(), String> {
+    println!(
+        "📋 Transferring settings from server {} to {}",
+        source_server_id, target_server_id
+    );
+
+    // Get both server paths
+    let (source_path, target_path) = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db.get_connection().map_err(|e| e.to_string())?;
+
+        let source: String = conn
+            .query_row(
+                "SELECT install_path FROM servers WHERE id = ?1",
+                [source_server_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("Source server not found: {}", e))?;
+
+        let target: String = conn
+            .query_row(
+                "SELECT install_path FROM servers WHERE id = ?1",
+                [target_server_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("Target server not found: {}", e))?;
+
+        (PathBuf::from(source), PathBuf::from(target))
+    };
+
+    // Copy config files
+    let source_config = source_path.join("ShooterGame/Saved/Config/WindowsServer");
+    let target_config = target_path.join("ShooterGame/Saved/Config/WindowsServer");
+
+    if !source_config.exists() {
+        return Err("Source server has no config files".to_string());
+    }
+
+    std::fs::create_dir_all(&target_config)
+        .map_err(|e| format!("Failed to create target config dir: {}", e))?;
+
+    for file in ["GameUserSettings.ini", "Game.ini"] {
+        let src = source_config.join(file);
+        let dst = target_config.join(file);
+        if src.exists() {
+            std::fs::copy(&src, &dst)
+                .map_err(|e| format!("Failed to copy {}: {}", file, e))?;
+            println!("  ✅ Copied {}", file);
+        }
+    }
+
+    println!("  ✅ Settings transferred successfully");
+    Ok(())
+}
+
+/// Extract save data (world/player) from one server to another
+#[tauri::command]
+pub async fn extract_save_data(
+    state: State<'_, AppState>,
+    source_server_id: i64,
+    target_server_id: i64,
+) -> Result<(), String> {
+    println!(
+        "📦 Extracting save data from server {} to {}",
+        source_server_id, target_server_id
+    );
+
+    // Get both server paths
+    let (source_path, target_path) = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db.get_connection().map_err(|e| e.to_string())?;
+
+        let source: String = conn
+            .query_row(
+                "SELECT install_path FROM servers WHERE id = ?1",
+                [source_server_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("Source server not found: {}", e))?;
+
+        let target: String = conn
+            .query_row(
+                "SELECT install_path FROM servers WHERE id = ?1",
+                [target_server_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("Target server not found: {}", e))?;
+
+        (PathBuf::from(source), PathBuf::from(target))
+    };
+
+    // Copy SavedArks folder (contains world and player data)
+    let source_saves = source_path.join("ShooterGame/Saved/SavedArks");
+    let target_saves = target_path.join("ShooterGame/Saved/SavedArks");
+
+    if !source_saves.exists() {
+        return Err("Source server has no save data".to_string());
+    }
+
+    // Create target directory
+    std::fs::create_dir_all(&target_saves)
+        .map_err(|e| format!("Failed to create target saves dir: {}", e))?;
+
+    // Copy all files recursively
+    fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+        if src.is_dir() {
+            std::fs::create_dir_all(dst)?;
+            for entry in std::fs::read_dir(src)? {
+                let entry = entry?;
+                let src_path = entry.path();
+                let dst_path = dst.join(entry.file_name());
+                if src_path.is_dir() {
+                    copy_dir_recursive(&src_path, &dst_path)?;
+                } else {
+                    std::fs::copy(&src_path, &dst_path)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    copy_dir_recursive(&source_saves, &target_saves)
+        .map_err(|e| format!("Failed to copy save data: {}", e))?;
+
+    println!("  ✅ Save data extracted successfully");
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn start_server(state: State<'_, AppState>, server_id: i64) -> Result<(), String> {
     println!("▶️ Starting server {}", server_id);
 
-    // Get server details
+    // Get server details including cluster info
     let (
         install_path,
         map_name,
@@ -194,13 +477,21 @@ pub async fn start_server(state: State<'_, AppState>, server_id: i64) -> Result<
         max_players,
         server_password,
         admin_password,
+        ip_address,
+        cluster_id,
+        cluster_name,
+        cluster_path,
     ) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let conn = db.get_connection().map_err(|e| e.to_string())?;
 
         conn.query_row(
-            "SELECT install_path, map_name, session_name, game_port, query_port, rcon_port, 
-             max_players, server_password, admin_password FROM servers WHERE id = ?1",
+            "SELECT s.install_path, s.map_name, s.session_name, s.game_port, s.query_port, s.rcon_port, 
+             s.max_players, s.server_password, s.admin_password, s.ip_address, s.cluster_id,
+             c.name, c.cluster_path
+             FROM servers s
+             LEFT JOIN clusters c ON s.cluster_id = c.id
+             WHERE s.id = ?1",
             [server_id],
             |row| {
                 Ok((
@@ -213,6 +504,10 @@ pub async fn start_server(state: State<'_, AppState>, server_id: i64) -> Result<
                     row.get::<_, i32>(6)?,
                     row.get::<_, Option<String>>(7)?,
                     row.get::<_, String>(8)?,
+                    row.get::<_, Option<String>>(9)?,
+                    row.get::<_, Option<i64>>(10)?,
+                    row.get::<_, Option<String>>(11)?,
+                    row.get::<_, Option<String>>(12)?,
                 ))
             },
         )
@@ -234,6 +529,9 @@ pub async fn start_server(state: State<'_, AppState>, server_id: i64) -> Result<
             max_players,
             server_password.as_deref(),
             &admin_password,
+            ip_address.as_deref(),
+            cluster_name.as_deref(),
+            cluster_path.as_deref(),
         )
         .map_err(|e| e.to_string())?;
 
@@ -278,7 +576,7 @@ pub async fn stop_server(state: State<'_, AppState>, server_id: i64) -> Result<(
 pub async fn restart_server(state: State<'_, AppState>, server_id: i64) -> Result<(), String> {
     println!("🔄 Restarting server {}", server_id);
 
-    // Get server details
+    // Get server details including cluster info
     let (
         install_path,
         map_name,
@@ -289,13 +587,20 @@ pub async fn restart_server(state: State<'_, AppState>, server_id: i64) -> Resul
         max_players,
         server_password,
         admin_password,
+        ip_address,
+        cluster_name,
+        cluster_path,
     ) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let conn = db.get_connection().map_err(|e| e.to_string())?;
 
         conn.query_row(
-            "SELECT install_path, map_name, session_name, game_port, query_port, rcon_port, 
-             max_players, server_password, admin_password FROM servers WHERE id = ?1",
+            "SELECT s.install_path, s.map_name, s.session_name, s.game_port, s.query_port, s.rcon_port, 
+             s.max_players, s.server_password, s.admin_password, s.ip_address,
+             c.name, c.cluster_path
+             FROM servers s
+             LEFT JOIN clusters c ON s.cluster_id = c.id
+             WHERE s.id = ?1",
             [server_id],
             |row| {
                 Ok((
@@ -308,6 +613,9 @@ pub async fn restart_server(state: State<'_, AppState>, server_id: i64) -> Resul
                     row.get::<_, i32>(6)?,
                     row.get::<_, Option<String>>(7)?,
                     row.get::<_, String>(8)?,
+                    row.get::<_, Option<String>>(9)?,
+                    row.get::<_, Option<String>>(10)?,
+                    row.get::<_, Option<String>>(11)?,
                 ))
             },
         )
@@ -329,6 +637,9 @@ pub async fn restart_server(state: State<'_, AppState>, server_id: i64) -> Resul
             max_players,
             server_password.as_deref(),
             &admin_password,
+            ip_address.as_deref(),
+            cluster_name.as_deref(),
+            cluster_path.as_deref(),
         )
         .map_err(|e| e.to_string())?;
 
@@ -358,6 +669,82 @@ pub async fn delete_server(state: State<'_, AppState>, server_id: i64) -> Result
         .map_err(|e| e.to_string())?;
 
     println!("  ✅ Server {} deleted", server_id);
+    Ok(())
+}
+
+/// Update server settings in database (syncs INI changes with DB)
+#[tauri::command]
+pub async fn update_server_settings(
+    state: State<'_, AppState>,
+    server_id: i64,
+    max_players: Option<i32>,
+    server_password: Option<String>,
+    admin_password: Option<String>,
+    map_name: Option<String>,
+    session_name: Option<String>,
+    game_port: Option<u16>,
+    query_port: Option<u16>,
+    rcon_port: Option<u16>,
+    ip_address: Option<String>,
+) -> Result<(), String> {
+    println!("⚙️ Updating server settings for server {}", server_id);
+
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db.get_connection().map_err(|e| e.to_string())?;
+
+    // Build dynamic update query
+    let mut updates = Vec::new();
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+    if let Some(v) = max_players {
+        updates.push("max_players = ?");
+        params.push(Box::new(v));
+    }
+    if let Some(v) = server_password {
+        updates.push("server_password = ?");
+        params.push(Box::new(v));
+    }
+    if let Some(v) = admin_password {
+        updates.push("admin_password = ?");
+        params.push(Box::new(v));
+    }
+    if let Some(v) = map_name {
+        updates.push("map_name = ?");
+        params.push(Box::new(v));
+    }
+    if let Some(v) = session_name {
+        updates.push("session_name = ?");
+        params.push(Box::new(v));
+    }
+    if let Some(v) = game_port {
+        updates.push("game_port = ?");
+        params.push(Box::new(v as i32));
+    }
+    if let Some(v) = query_port {
+        updates.push("query_port = ?");
+        params.push(Box::new(v as i32));
+    }
+    if let Some(v) = rcon_port {
+        updates.push("rcon_port = ?");
+        params.push(Box::new(v as i32));
+    }
+    if let Some(v) = ip_address {
+        updates.push("ip_address = ?");
+        params.push(Box::new(v));
+    }
+
+    if updates.is_empty() {
+        return Ok(());
+    }
+
+    let query = format!("UPDATE servers SET {} WHERE id = ?", updates.join(", "));
+    params.push(Box::new(server_id));
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    conn.execute(&query, params_refs.as_slice())
+        .map_err(|e| e.to_string())?;
+
+    println!("  ✅ Server {} settings updated", server_id);
     Ok(())
 }
 

@@ -171,6 +171,33 @@ export default function VisualSettingsManager() {
                 content: generateIniContent(gameIniSections)
             });
 
+            // Sync key settings to database for persistence
+            const serverSettings = settings.get('ServerSettings');
+            if (serverSettings) {
+                const dbUpdate: Record<string, unknown> = { serverId: selectedServerId };
+
+                const maxPlayers = serverSettings.get('MaxPlayers');
+                if (maxPlayers) dbUpdate.maxPlayers = parseInt(maxPlayers) || 70;
+
+                const serverPassword = serverSettings.get('ServerPassword');
+                if (serverPassword !== undefined) dbUpdate.serverPassword = serverPassword;
+
+                const adminPassword = serverSettings.get('ServerAdminPassword');
+                if (adminPassword) dbUpdate.adminPassword = adminPassword;
+
+                const mapName = serverSettings.get('MapName');
+                if (mapName) dbUpdate.mapName = mapName;
+
+                const sessionName = serverSettings.get('ServerName');
+                if (sessionName) dbUpdate.sessionName = sessionName;
+
+                const ipAddress = serverSettings.get('IPAddress');
+                if (ipAddress !== undefined) dbUpdate.ipAddress = ipAddress;
+
+                // Update database with synced values
+                await invoke('update_server_settings', dbUpdate);
+            }
+
             setOriginalSettings(new Map(settings));
             setHasChanges(false);
             toast.success('Configuration saved successfully');

@@ -62,6 +62,18 @@ impl Database {
             )?;
         }
 
+        // Add ip_address column if missing
+        if !columns.contains(&"ip_address".to_string()) {
+            println!("📦 Migration: Adding 'ip_address' column to servers table");
+            conn.execute("ALTER TABLE servers ADD COLUMN ip_address TEXT", [])?;
+        }
+
+        // Add cluster_id column if missing
+        if !columns.contains(&"cluster_id".to_string()) {
+            println!("📦 Migration: Adding 'cluster_id' column to servers table");
+            conn.execute("ALTER TABLE servers ADD COLUMN cluster_id INTEGER REFERENCES clusters(id) ON DELETE SET NULL", [])?;
+        }
+
         Ok(())
     }
 

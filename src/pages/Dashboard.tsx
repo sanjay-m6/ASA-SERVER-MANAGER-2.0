@@ -9,10 +9,12 @@ import { toast } from 'react-hot-toast';
 import { useServerStore } from '../stores/serverStore';
 import { useUIStore } from '../stores/uiStore';
 import { cn } from '../utils/helpers';
-import { getAllServers, getSystemInfo, startServer, stopServer, restartServer } from '../utils/tauri';
+import { getAllServers, getSystemInfo, startServer, stopServer, restartServer, cloneServer, transferSettings, extractSaveData } from '../utils/tauri';
 import { getVersion } from '@tauri-apps/api/app';
 import PerformanceMonitor from '../components/performance/PerformanceMonitor';
 import InstallServerDialog from '../components/server/InstallServerDialog';
+import CloneOptionsModal from '../components/server/CloneOptionsModal';
+import { Server as ServerType } from '../types';
 
 export default function Dashboard() {
   const { servers, setServers, updateServerStatus } = useServerStore();
@@ -71,6 +73,44 @@ export default function Dashboard() {
       toast.success('Server restarted!');
     } catch (error) {
       toast.error(`Failed: ${error}`);
+    }
+  };
+
+  // Clone Modal state
+  const [cloneModalServer, setCloneModalServer] = useState<ServerType | null>(null);
+
+  const openCloneModal = (server: ServerType) => {
+    setCloneModalServer(server);
+  };
+
+  const handleCloneServer = async () => {
+    if (!cloneModalServer) return;
+    try {
+      const newServer = await cloneServer(cloneModalServer.id);
+      setServers([...servers, newServer]);
+      toast.success(`Server cloned as "${newServer.name}"`);
+    } catch (error) {
+      toast.error(`Failed to clone: ${error}`);
+    }
+  };
+
+  const handleTransferSettings = async (targetServerId: number) => {
+    if (!cloneModalServer) return;
+    try {
+      await transferSettings(cloneModalServer.id, targetServerId);
+      toast.success('Settings transferred successfully');
+    } catch (error) {
+      toast.error(`Failed to transfer settings: ${error}`);
+    }
+  };
+
+  const handleExtractData = async (targetServerId: number) => {
+    if (!cloneModalServer) return;
+    try {
+      await extractSaveData(cloneModalServer.id, targetServerId);
+      toast.success('Save data extracted successfully');
+    } catch (error) {
+      toast.error(`Failed to extract save data: ${error}`);
     }
   };
 
@@ -363,6 +403,15 @@ export default function Dashboard() {
                       </span>
                     )}
                   </span>
+
+                  {/* Clone Button */}
+                  <button
+                    onClick={() => openCloneModal(server)}
+                    className="p-2 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 rounded-lg transition-all ml-1"
+                    title="Clone / Transfer / Extract"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -426,6 +475,19 @@ export default function Dashboard() {
       {/* Install Server Dialog */}
       {showInstallDialog && (
         <InstallServerDialog onClose={() => setShowInstallDialog(false)} />
+      )}
+
+      {/* Clone Options Modal */}
+      {cloneModalServer && (
+        <CloneOptionsModal
+          isOpen={true}
+          onClose={() => setCloneModalServer(null)}
+          sourceServer={cloneModalServer}
+          allServers={servers}
+          onCloneServer={handleCloneServer}
+          onTransferSettings={handleTransferSettings}
+          onExtractData={handleExtractData}
+        />
       )}
     </div>
   );

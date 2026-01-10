@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Plus, Server as ServerIcon, Network, Trash2, Loader2, Link as LinkIcon } from 'lucide-react';
+import { Plus, Server as ServerIcon, Network, Trash2, Loader2, Link as LinkIcon, Play, Square } from 'lucide-react';
 import { cn } from '../utils/helpers';
-import { createCluster, getClusters, deleteCluster } from '../utils/tauri';
-import { Cluster } from '../types';
+import { createCluster, getClusters, deleteCluster, startCluster, stopCluster } from '../utils/tauri';
+import { Cluster, Server } from '../types';
 import toast from 'react-hot-toast';
 import { useServerStore } from '../stores/serverStore';
+import { listen } from '@tauri-apps/api/event';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 export default function ClusterManager() {
     const [clusters, setClusters] = useState<Cluster[]>([]);
@@ -12,7 +14,9 @@ export default function ClusterManager() {
     const [isCreating, setIsCreating] = useState(false);
     const [newClusterName, setNewClusterName] = useState('');
     const [selectedServers, setSelectedServers] = useState<number[]>([]);
-    const { servers } = useServerStore();
+    const [startingCluster, setStartingCluster] = useState<number | null>(null);
+    const [stoppingCluster, setStoppingCluster] = useState<number | null>(null);
+    const { servers, refreshServers } = useServerStore();
 
     const fetchClusters = async () => {
         setIsLoading(true);
@@ -29,7 +33,16 @@ export default function ClusterManager() {
 
     useEffect(() => {
         fetchClusters();
-    }, []);
+
+        // Listen for server status changes to update cluster view in realtime
+        const unlisten = listen('server_status_update', () => {
+            refreshServers();
+        });
+
+        return () => {
+            unlisten.then(fn => fn());
+        };
+    }, [refreshServers]);
 
     const handleCreateCluster = async () => {
         if (!newClusterName.trim()) {
@@ -54,16 +67,46 @@ export default function ClusterManager() {
         }
     };
 
-    const handleDeleteCluster = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this cluster?')) return;
+    const [deleteConfirmCluster, setDeleteConfirmCluster] = useState<Cluster | null>(null);
 
+    const confirmDeleteCluster = async () => {
+        if (!deleteConfirmCluster) return;
         try {
-            await deleteCluster(id);
+            await deleteCluster(deleteConfirmCluster.id);
             toast.success('Cluster deleted');
+            setDeleteConfirmCluster(null);
             fetchClusters();
         } catch (error) {
             console.error('Failed to delete cluster:', error);
             toast.error('Failed to delete cluster');
+        }
+    };
+
+    const handleStartCluster = async (clusterId: number) => {
+        setStartingCluster(clusterId);
+        try {
+            await startCluster(clusterId);
+            toast.success('Starting all servers in cluster');
+            refreshServers();
+        } catch (error) {
+            console.error('Failed to start cluster:', error);
+            toast.error('Failed to start cluster');
+        } finally {
+            setStartingCluster(null);
+        }
+    };
+
+    const handleStopCluster = async (clusterId: number) => {
+        setStoppingCluster(clusterId);
+        try {
+            await stopCluster(clusterId);
+            toast.success('Stopping all servers in cluster');
+            refreshServers();
+        } catch (error) {
+            console.error('Failed to stop cluster:', error);
+            toast.error('Failed to stop cluster');
+        } finally {
+            setStoppingCluster(null);
         }
     };
 
@@ -73,6 +116,17 @@ export default function ClusterManager() {
                 ? prev.filter(id => id !== serverId)
                 : [...prev, serverId]
         );
+    };
+
+    const getServerStatus = (serverId: number): Server | undefined => {
+        return servers.find(s => s.id === serverId);
+    };
+
+    const getClusterRunningCount = (cluster: Cluster): number => {
+        return cluster.serverIds.filter(id => {
+            const server = getServerStatus(id);
+            return server?.status === 'running';
+        }).length;
     };
 
     return (
@@ -173,7 +227,7 @@ export default function ClusterManager() {
                         <div key={cluster.id} className="glass-panel rounded-2xl p-6 relative group">
                             <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
-                                    onClick={() => handleDeleteCluster(cluster.id)}
+                                    onClick={() => setDeleteConfirmCluster(cluster)}
                                     className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                                 >
                                     <Trash2 className="w-5 h-5" />
@@ -186,14 +240,52 @@ export default function ClusterManager() {
                                 </div>
                                 <div>
                                     <h3 className="text-xl font-bold text-white">{cluster.name}</h3>
-                                    <p className="text-sm text-slate-400">ID: {cluster.id} • {cluster.serverIds.length} Linked Servers</p>
+                                    <p className="text-sm text-slate-400">
+                                        ID: {cluster.id} • {cluster.serverIds.length} Servers •
+                                        <span className={cn(
+                                            "ml-1 font-medium",
+                                            getClusterRunningCount(cluster) > 0 ? "text-emerald-400" : "text-slate-500"
+                                        )}>
+                                            {getClusterRunningCount(cluster)}/{cluster.serverIds.length} Running
+                                        </span>
+                                    </p>
+                                </div>
+
+                                {/* Control Buttons */}
+                                <div className="flex space-x-2 ml-auto">
+                                    <button
+                                        onClick={() => handleStartCluster(cluster.id)}
+                                        disabled={startingCluster === cluster.id || getClusterRunningCount(cluster) === cluster.serverIds.length}
+                                        className="flex items-center space-x-1 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                                    >
+                                        {startingCluster === cluster.id ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <Play className="w-4 h-4" />
+                                        )}
+                                        <span>Start All</span>
+                                    </button>
+                                    <button
+                                        onClick={() => handleStopCluster(cluster.id)}
+                                        disabled={stoppingCluster === cluster.id || getClusterRunningCount(cluster) === 0}
+                                        className="flex items-center space-x-1 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                                    >
+                                        {stoppingCluster === cluster.id ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <Square className="w-4 h-4" />
+                                        )}
+                                        <span>Stop All</span>
+                                    </button>
                                 </div>
                             </div>
 
                             <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700/50">
-                                <div className="flex items-center justify-center space-x-4">
+                                <div className="flex items-center justify-center space-x-4 flex-wrap gap-y-4">
                                     {cluster.serverIds.map((serverId, index) => {
-                                        const server = servers.find(s => s.id === serverId);
+                                        const server = getServerStatus(serverId);
+                                        const isRunning = server?.status === 'running';
+                                        const isStarting = server?.status === 'starting';
                                         return (
                                             <div key={serverId} className="flex items-center">
                                                 {index > 0 && (
@@ -204,10 +296,27 @@ export default function ClusterManager() {
                                                     </div>
                                                 )}
                                                 <div className="flex flex-col items-center">
-                                                    <div className="w-10 h-10 bg-slate-800 rounded-lg border border-slate-600 flex items-center justify-center mb-2">
-                                                        <ServerIcon className="w-5 h-5 text-slate-400" />
+                                                    <div className={cn(
+                                                        "w-10 h-10 rounded-lg border flex items-center justify-center mb-2 relative",
+                                                        isRunning ? "bg-emerald-500/20 border-emerald-500/50" :
+                                                            isStarting ? "bg-amber-500/20 border-amber-500/50" :
+                                                                "bg-slate-800 border-slate-600"
+                                                    )}>
+                                                        <ServerIcon className={cn(
+                                                            "w-5 h-5",
+                                                            isRunning ? "text-emerald-400" :
+                                                                isStarting ? "text-amber-400" :
+                                                                    "text-slate-400"
+                                                        )} />
+                                                        {/* Status indicator dot */}
+                                                        <div className={cn(
+                                                            "absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-slate-900",
+                                                            isRunning ? "bg-emerald-400" :
+                                                                isStarting ? "bg-amber-400 animate-pulse" :
+                                                                    "bg-slate-600"
+                                                        )} />
                                                     </div>
-                                                    <span className="text-xs text-slate-300 font-medium">
+                                                    <span className="text-xs text-slate-300 font-medium max-w-[80px] truncate">
                                                         {server?.name || `Server ${serverId}`}
                                                     </span>
                                                 </div>
@@ -220,6 +329,17 @@ export default function ClusterManager() {
                     ))
                 )}
             </div>
+
+            {/* Delete Confirmation Dialog */}
+            <ConfirmDialog
+                isOpen={!!deleteConfirmCluster}
+                onClose={() => setDeleteConfirmCluster(null)}
+                onConfirm={confirmDeleteCluster}
+                title="Delete Cluster"
+                message={`Are you sure you want to delete "${deleteConfirmCluster?.name}"? This will unlink all servers from this cluster.`}
+                confirmText="Delete"
+                variant="danger"
+            />
         </div>
     );
 }

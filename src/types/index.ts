@@ -12,6 +12,7 @@ export interface Server {
     status: ServerStatus;
     config: ServerConfig;
     ports: ServerPorts;
+    ipAddress?: string;
     createdAt: string;
     lastStarted?: string;
     reachability?: 'Public' | 'LAN' | 'Unknown';

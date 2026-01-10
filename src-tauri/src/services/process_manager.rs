@@ -82,6 +82,9 @@ impl ProcessManager {
         max_players: i32,
         server_password: Option<&str>,
         admin_password: &str,
+        ip_address: Option<&str>,
+        cluster_id: Option<&str>,
+        cluster_dir: Option<&str>,
     ) -> Result<()> {
         let executable = install_path
             .join("ShooterGame")
@@ -121,6 +124,25 @@ impl ProcessManager {
 
         args.push("-log".to_string());
         args.push("-NoBattlEye".to_string());
+
+        // Add MultiHome for IP binding
+        if let Some(ip) = ip_address {
+            if !ip.is_empty() {
+                args.push(format!("-MultiHome={}", ip));
+            }
+        }
+
+        // Add cluster configuration for cross-ARK travel
+        if let (Some(cid), Some(cdir)) = (cluster_id, cluster_dir) {
+            if !cid.is_empty() && !cdir.is_empty() {
+                args.push(format!("-clusterid={}", cid));
+                args.push(format!("-ClusterDirOverride=\"{}\"", cdir));
+                println!(
+                    "  🔗 Server {} joining cluster: {} at {}",
+                    server_id, cid, cdir
+                );
+            }
+        }
 
         let mut command = Command::new(&executable);
         command
@@ -285,6 +307,9 @@ impl ProcessManager {
         max_players: i32,
         server_password: Option<&str>,
         admin_password: &str,
+        ip_address: Option<&str>,
+        cluster_id: Option<&str>,
+        cluster_dir: Option<&str>,
     ) -> Result<()> {
         if self.is_running(server_id) {
             self.stop_server(server_id)?;
@@ -304,6 +329,9 @@ impl ProcessManager {
             max_players,
             server_password,
             admin_password,
+            ip_address,
+            cluster_id,
+            cluster_dir,
         )
     }
 }

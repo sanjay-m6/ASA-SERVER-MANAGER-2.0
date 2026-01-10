@@ -98,6 +98,10 @@ pub fn run() {
             commands::server::restart_server,
             commands::server::delete_server,
             commands::server::update_server,
+            commands::server::update_server_settings,
+            commands::server::clone_server,
+            commands::server::transfer_settings,
+            commands::server::extract_save_data,
             commands::server::check_server_reachability,
             commands::server::start_log_watcher,
             // Mod commands

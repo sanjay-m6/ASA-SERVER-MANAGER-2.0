@@ -42,8 +42,16 @@ pub async fn create_cluster(
         let conn = db.get_connection().map_err(|e| e.to_string())?;
 
         for server_id in &server_ids {
+            // Insert into cluster_servers junction table
             conn.execute(
                 "INSERT OR REPLACE INTO cluster_servers (cluster_id, server_id) VALUES (?1, ?2)",
+                rusqlite::params![cluster_id, server_id],
+            )
+            .map_err(|e| e.to_string())?;
+
+            // Set cluster_id on the server for startup arg lookup
+            conn.execute(
+                "UPDATE servers SET cluster_id = ?1 WHERE id = ?2",
                 rusqlite::params![cluster_id, server_id],
             )
             .map_err(|e| e.to_string())?;
@@ -318,6 +326,19 @@ pub async fn get_cluster_status(
 pub async fn start_cluster(state: State<'_, AppState>, cluster_id: i64) -> Result<(), String> {
     println!("▶️ Starting all servers in cluster {}", cluster_id);
 
+    // Get cluster info first
+    let (cluster_name, cluster_path): (String, String) = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db.get_connection().map_err(|e| e.to_string())?;
+
+        conn.query_row(
+            "SELECT name, cluster_path FROM clusters WHERE id = ?1",
+            [cluster_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| format!("Cluster not found: {}", e))?
+    };
+
     // Get all server info for this cluster
     let servers: Vec<(
         i64,
@@ -330,6 +351,7 @@ pub async fn start_cluster(state: State<'_, AppState>, cluster_id: i64) -> Resul
         i32,
         Option<String>,
         String,
+        Option<String>,
     )> = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let conn = db.get_connection().map_err(|e| e.to_string())?;
@@ -337,7 +359,7 @@ pub async fn start_cluster(state: State<'_, AppState>, cluster_id: i64) -> Resul
         let mut stmt = conn
             .prepare(
                 "SELECT s.id, s.install_path, s.map_name, s.session_name, s.game_port, 
-                        s.query_port, s.rcon_port, s.max_players, s.server_password, s.admin_password
+                        s.query_port, s.rcon_port, s.max_players, s.server_password, s.admin_password, s.ip_address
                  FROM servers s
                  INNER JOIN cluster_servers cs ON s.id = cs.server_id
                  WHERE cs.cluster_id = ?1 AND s.status = 'stopped'",
@@ -358,12 +380,13 @@ pub async fn start_cluster(state: State<'_, AppState>, cluster_id: i64) -> Resul
                 row.get::<_, i32>(7).unwrap_or(70),
                 row.get::<_, Option<String>>(8).unwrap_or(None),
                 row.get::<_, String>(9).unwrap_or_default(),
+                row.get::<_, Option<String>>(10).unwrap_or(None),
             ));
         }
         result
     };
 
-    // Start each server
+    // Start each server with cluster args
     for (
         server_id,
         install_path,
@@ -375,10 +398,12 @@ pub async fn start_cluster(state: State<'_, AppState>, cluster_id: i64) -> Resul
         max_players,
         server_password,
         admin_password,
+        ip_address,
     ) in servers
     {
         let install_path = PathBuf::from(&install_path);
         let server_password_ref = server_password.as_deref();
+        let ip_address_ref = ip_address.as_deref();
 
         if let Err(e) = state.process_manager.start_server(
             server_id,
@@ -392,6 +417,9 @@ pub async fn start_cluster(state: State<'_, AppState>, cluster_id: i64) -> Resul
             max_players,
             server_password_ref,
             &admin_password,
+            ip_address_ref,
+            Some(&cluster_name),
+            Some(&cluster_path),
         ) {
             println!("  ⚠️ Failed to start server {}: {}", server_id, e);
         } else {

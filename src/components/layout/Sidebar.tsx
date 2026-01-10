@@ -62,7 +62,7 @@ export default function Sidebar() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 font-display">ASA Manager</h1>
-            <p className="text-xs text-slate-400 font-medium tracking-wide">COMMAND CENTER 2.0</p>
+            <p className="text-xs text-slate-400 font-medium tracking-wide">COMMAND CENTER 2.1</p>
           </div>
         </div>
       </div>
@@ -114,8 +114,8 @@ export default function Sidebar() {
           <div className="w-full bg-slate-700/50 rounded-full h-1">
             <div className={cn(
               "h-1 rounded-full w-full",
-              isAnyServerRunning 
-                ? "bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]" 
+              isAnyServerRunning
+                ? "bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]"
                 : "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"
             )}></div>
           </div>

@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS servers (
     mods TEXT,
     custom_args TEXT,
     rcon_enabled INTEGER DEFAULT 1,
+    ip_address TEXT,
+    cluster_id INTEGER REFERENCES clusters(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_started TIMESTAMP,
     UNIQUE(name)

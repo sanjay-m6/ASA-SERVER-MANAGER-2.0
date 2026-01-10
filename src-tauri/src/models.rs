@@ -37,6 +37,7 @@ pub struct Server {
     pub ports: ServerPorts,
     pub config: ServerConfig,
     pub rcon_config: RconConfig,
+    pub ip_address: Option<String>,
     pub created_at: String,
     pub last_started: Option<String>,
 }

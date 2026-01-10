@@ -88,6 +88,35 @@ export async function updateServer(serverId: number): Promise<void> {
     return await invoke('update_server', { serverId });
 }
 
+export async function cloneServer(serverId: number): Promise<Server> {
+    return await invoke('clone_server', { sourceServerId: serverId });
+}
+
+export async function transferSettings(sourceServerId: number, targetServerId: number): Promise<void> {
+    return await invoke('transfer_settings', { sourceServerId, targetServerId });
+}
+
+export async function extractSaveData(sourceServerId: number, targetServerId: number): Promise<void> {
+    return await invoke('extract_save_data', { sourceServerId, targetServerId });
+}
+
+export interface UpdateServerSettingsParams {
+    serverId: number;
+    maxPlayers?: number;
+    serverPassword?: string;
+    adminPassword?: string;
+    mapName?: string;
+    sessionName?: string;
+    gamePort?: number;
+    queryPort?: number;
+    rconPort?: number;
+    ipAddress?: string;
+}
+
+export async function updateServerSettings(params: UpdateServerSettingsParams): Promise<void> {
+    return await invoke('update_server_settings', { ...params });
+}
+
 export async function checkServerReachability(port: number): Promise<'Public' | 'LAN' | 'Unknown' | 'Offline'> {
     return await invoke('check_server_reachability', { port });
 }

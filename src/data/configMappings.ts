@@ -107,6 +107,14 @@ export const GAME_USER_SETTINGS_SCHEMA: ConfigGroup[] = [
                     { value: 'Fjordur_WP', label: '❄️ Fjordur', group: 'upcoming' }
                 ],
                 description: 'The map to load'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'IPAddress',
+                label: 'Server IP Address',
+                type: 'text',
+                defaultValue: '',
+                description: 'Bind server to specific IP address (leave empty for all interfaces)'
             }
         ]
     },

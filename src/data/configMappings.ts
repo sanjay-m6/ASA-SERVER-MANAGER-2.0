@@ -115,6 +115,25 @@ export const GAME_USER_SETTINGS_SCHEMA: ConfigGroup[] = [
                 type: 'text',
                 defaultValue: '',
                 description: 'Bind server to specific IP address (leave empty for all interfaces)'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'RCONEnabled',
+                label: 'RCON Enabled',
+                type: 'boolean',
+                defaultValue: 'True',
+                description: 'Enable remote console access for server management'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'RCONPort',
+                label: 'RCON Port',
+                type: 'slider',
+                defaultValue: '27020',
+                min: 1,
+                max: 65535,
+                step: 1,
+                description: 'Port for RCON connections (default: 27020)'
             }
         ]
     },

@@ -463,7 +463,11 @@ pub async fn extract_save_data(
 }
 
 #[tauri::command]
-pub async fn start_server(state: State<'_, AppState>, server_id: i64) -> Result<(), String> {
+pub async fn start_server(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    server_id: i64,
+) -> Result<(), String> {
     println!("▶️ Starting server {}", server_id);
 
     // Get server details including cluster info
@@ -514,13 +518,44 @@ pub async fn start_server(state: State<'_, AppState>, server_id: i64) -> Result<
         .map_err(|e| format!("Server not found: {}", e))?
     };
 
+    let install_path_buf = PathBuf::from(&install_path);
+
+    // Check if server executable exists
+    let executable = install_path_buf
+        .join("ShooterGame")
+        .join("Binaries")
+        .join("Win64")
+        .join("ArkAscendedServer.exe");
+
+    if !executable.exists() {
+        // Server executable not found, trigger installation
+        println!("  📥 Server executable not found, starting automatic download...");
+
+        // Update status to 'updating' to show download progress
+        {
+            let db = state.db.lock().map_err(|e| e.to_string())?;
+            let conn = db.get_connection().map_err(|e| e.to_string())?;
+            conn.execute(
+                "UPDATE servers SET status = 'updating' WHERE id = ?1",
+                [server_id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+
+        // Run the installation via SteamCMD
+        let installer = ServerInstaller::new(app_handle.clone());
+        installer.install_asa_server(&install_path_buf).await?;
+
+        println!("  ✅ Server download complete, now starting...");
+    }
+
     // Start the server process
     state
         .process_manager
         .start_server(
             server_id,
             "ASA",
-            &PathBuf::from(&install_path),
+            &install_path_buf,
             &map_name,
             &session_name,
             game_port,

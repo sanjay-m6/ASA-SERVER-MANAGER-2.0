@@ -80,7 +80,7 @@ export default function RconConsole() {
         try {
             const response = await invoke<RconResponse>('rcon_connect', {
                 serverId: selectedServer.id,
-                address: '127.0.0.1',
+                address: selectedServer.ipAddress || '127.0.0.1',
                 port: selectedServer.ports.rconPort,
                 password: selectedServer.config.adminPassword,
             });

@@ -35,8 +35,8 @@ export default function Dashboard() {
   const greeting = getGreeting();
   const GreetingIcon = greeting.icon;
 
-  const handleCopyIp = (port: number) => {
-    const ip = '127.0.0.1';
+  const handleCopyIp = (serverIp: string | undefined, port: number) => {
+    const ip = serverIp || '127.0.0.1';
     const address = `${ip}:${port}`;
     navigator.clipboard.writeText(address);
     toast.success(`Copied ${address} to clipboard`);
@@ -349,9 +349,9 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2">
                   {/* IP Display + Copy */}
                   <div className="hidden md:flex items-center bg-slate-900/50 rounded-lg px-3 py-1.5 border border-slate-700">
-                    <span className="text-xs font-mono text-slate-400 mr-2">127.0.0.1:{server.ports.gamePort}</span>
+                    <span className="text-xs font-mono text-slate-400 mr-2">{server.ipAddress || '127.0.0.1'}:{server.ports.gamePort}</span>
                     <button
-                      onClick={() => handleCopyIp(server.ports.gamePort)}
+                      onClick={() => handleCopyIp(server.ipAddress, server.ports.gamePort)}
                       className="p-1 hover:bg-slate-700 rounded transition-colors"
                       title="Copy IP"
                     >

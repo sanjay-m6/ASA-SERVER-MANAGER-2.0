@@ -27,9 +27,13 @@ pub async fn create_cluster(
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let conn = db.get_connection().map_err(|e| e.to_string())?;
 
+        // Serialize server_ids as JSON array
+        let server_ids_json = serde_json::to_string(&server_ids)
+            .map_err(|e| format!("Failed to serialize server_ids: {}", e))?;
+
         conn.execute(
-            "INSERT INTO clusters (name, cluster_path) VALUES (?1, ?2)",
-            rusqlite::params![name, cluster_dir],
+            "INSERT INTO clusters (name, cluster_path, server_ids) VALUES (?1, ?2, ?3)",
+            rusqlite::params![name, cluster_dir, server_ids_json],
         )
         .map_err(|e| e.to_string())?;
 

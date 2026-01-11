@@ -272,7 +272,8 @@ export default function ConfigBuilder({ serverId: _serverId, installPath, initia
                         <SettingInput label="Admin Password" value={config.adminPassword} onChange={v => updateConfig('adminPassword', v)} />
                         <SettingSlider label="Max Players" value={config.maxPlayers} onChange={v => updateConfig('maxPlayers', v)} min={1} max={127} step={1} />
                         <SettingToggle label="PvE Mode" value={config.pveMode} onChange={v => updateConfig('pveMode', v)} description="Disable player damage" />
-                        <SettingToggle label="RCON Enabled" value={config.rconEnabled} onChange={v => updateConfig('rconEnabled', v)} description="Remote console access" />
+                        <SettingToggle label="RCON Enabled" value={config.rconEnabled} onChange={v => updateConfig('rconEnabled', v)} description="Enable remote console access" />
+                        <SettingSlider label="RCON Port" value={config.rconPort} onChange={v => updateConfig('rconPort', v)} min={1} max={65535} step={1} description="Default: 27020" />
                     </div>
                 )}
 

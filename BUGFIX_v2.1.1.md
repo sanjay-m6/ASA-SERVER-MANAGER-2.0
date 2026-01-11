@@ -61,4 +61,4 @@ Download the latest installer: **ASA Server Manager_2.1.1_x64-setup.exe**
 ---
 
 ## 🙏 Thank You
-Thanks for using ASA Server Manager! Report any issues in our Discord server.
+Thanks for using ASA Server Manager! Report any issues in our [Discord server](https://discord.gg/Pr69DHEnXJ).

@@ -3,13 +3,14 @@
 <div align="center">
 
 ![ASA Server Manager](https://img.shields.io/badge/ASA-Server%20Manager-blue?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiI+PHBhdGggZD0iTTEyIDJ2MjAiLz48cGF0aCBkPSJNMiAxMmgyMCIvPjwvc3ZnPg==)
-![Version](https://img.shields.io/badge/version-2.0.0-green?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-2.1.1-green?style=for-the-badge)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D6?style=for-the-badge&logo=windows)
 ![License](https://img.shields.io/badge/license-MIT-orange?style=for-the-badge)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/Pr69DHEnXJ)
 
 **A professional-grade ARK: Survival Ascended dedicated server management application built with Tauri, React, and Rust.**
 
-[Features](#-features) • [Installation](#-installation) • [Development](#-development) • [Architecture](#-architecture) • [Contributing](#-contributing)
+[Features](#-features) • [Installation](#-installation) • [Discord](https://discord.gg/Pr69DHEnXJ) • [Development](#-development) • [Contributing](#-contributing)
 
 </div>
 
@@ -193,6 +194,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Made with ❤️ for the ARK Community**
 
-[Report Bug](https://github.com/sanjay-m6/ASA-SERVER-MANAGER-2.0/issues) • [Request Feature](https://github.com/sanjay-m6/ASA-SERVER-MANAGER-2.0/issues)
+[Discord](https://discord.gg/Pr69DHEnXJ) • [Report Bug](https://github.com/sanjay-m6/ASA-SERVER-MANAGER-2.0/issues) • [Request Feature](https://github.com/sanjay-m6/ASA-SERVER-MANAGER-2.0/issues)
 
 </div>

@@ -59,7 +59,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
-          args: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY == '' && '--no-sign' || '' }}
+
 
 
   lint:

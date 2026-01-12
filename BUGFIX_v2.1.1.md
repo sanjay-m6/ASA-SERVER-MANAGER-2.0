@@ -38,6 +38,15 @@
 
 ---
 
+### 🟢 Fix: GitHub Actions Build Workflow
+**Issue:** CI/CD build workflow failed with "Unable to resolve action `tauri-apps/tauri-action@v2`" error.
+
+**Cause:** The `tauri-apps/tauri-action` GitHub Action does not have a `v2` tag. Even though the project uses Tauri 2.0, the action itself is versioned at `v0`.
+
+**Fix:** Updated `.github/workflows/build.yml` to use `tauri-apps/tauri-action@v0`.
+
+---
+
 ### 🟢 Enhancement: RCON Configuration in Settings
 **Enhancement:** Added RCON settings to the Visual Settings Manager:
 - **RCON Enabled** toggle - Enable/disable remote console access
@@ -46,6 +55,7 @@
 ---
 
 ## 📁 Files Changed
+- `.github/workflows/build.yml` - Fixed tauri-action version from v2 to v0
 - `src-tauri/src/commands/cluster.rs` - Fixed cluster creation INSERT statement
 - `src-tauri/src/commands/server.rs` - Auto-download server if executable missing
 - `src/pages/Dashboard.tsx` - Display correct server IP address

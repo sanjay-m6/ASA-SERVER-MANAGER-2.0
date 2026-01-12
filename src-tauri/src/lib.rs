@@ -104,6 +104,7 @@ pub fn run() {
             commands::server::extract_save_data,
             commands::server::check_server_reachability,
             commands::server::start_log_watcher,
+            commands::server::import_server,
             // Mod commands
             commands::mods::search_mods,
             commands::mods::get_mod_description,

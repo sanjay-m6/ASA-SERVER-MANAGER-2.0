@@ -64,7 +64,7 @@ const CATEGORIES = [
     { id: 'daynight', label: 'Day/Night', icon: Sun, color: 'from-yellow-500 to-amber-500' },
 ];
 
-export default function ConfigBuilder({ serverId: _serverId, installPath, initialMapName, onConfigSaved }: Props) {
+export default function ConfigBuilder({ serverId, installPath, initialMapName, onConfigSaved }: Props) {
     const [config, setConfig] = useState<ServerConfig | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -133,19 +133,25 @@ export default function ConfigBuilder({ serverId: _serverId, installPath, initia
     };
 
     const saveConfig = async () => {
-        if (!config || !installPath) {
-            toast.error('No install path specified');
+        if (!config || !installPath || !serverId) {
+            toast.error('No server or install path specified');
             return;
         }
 
         setIsSaving(true);
         try {
             await invoke('write_server_configs', {
+                serverId,
                 installPath,
                 config,
                 backup: true
             });
             toast.success('Configuration saved!');
+
+            // Refresh servers list to reflect the updated config in UI
+            const { useServerStore } = await import('../../stores/serverStore');
+            useServerStore.getState().refreshServers();
+
             onConfigSaved?.();
         } catch (error) {
             console.error('Failed to save config:', error);

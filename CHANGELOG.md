@@ -42,6 +42,7 @@ All notable changes to ASA Server Manager will be documented in this file.
 - Added `clone_server`, `transfer_settings`, `extract_save_data` backend commands
 - Added `refreshServers` method to server store for realtime updates
 - Database migrations for `ip_address` and `cluster_id` columns
+- Fixed GitHub Actions workflow to use `tauri-apps/tauri-action@v0` (v2 doesn't exist)
 
 ---
 

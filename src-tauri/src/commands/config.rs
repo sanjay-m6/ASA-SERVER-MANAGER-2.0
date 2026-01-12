@@ -202,13 +202,43 @@ pub async fn apply_map_profile_to_config(
 /// Write config files to server directory
 #[tauri::command]
 pub async fn write_server_configs(
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
+    server_id: i64,
     install_path: String,
     config: ServerConfig,
     backup: bool,
 ) -> Result<(), String> {
     let path = PathBuf::from(install_path);
-    ConfigGenerator::write_configs(&path, &config, backup)
+    ConfigGenerator::write_configs(&path, &config, backup)?;
+
+    // Sync config values to database so UI reflects the changes
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db.get_connection().map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "UPDATE servers SET max_players = ?1, map_name = ?2, session_name = ?3, 
+         game_port = ?4, query_port = ?5, rcon_port = ?6, admin_password = ?7,
+         server_password = ?8, rcon_enabled = ?9 WHERE id = ?10",
+        rusqlite::params![
+            config.max_players,
+            config.map_name,
+            config.session_name,
+            config.game_port,
+            config.query_port,
+            config.rcon_port,
+            config.admin_password,
+            config.server_password,
+            config.rcon_enabled,
+            server_id,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    println!(
+        "✅ Config saved and synced to database for server {}",
+        server_id
+    );
+    Ok(())
 }
 
 /// Backup all config files for a server

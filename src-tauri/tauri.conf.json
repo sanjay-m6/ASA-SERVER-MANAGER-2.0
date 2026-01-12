@@ -35,14 +35,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "createUpdaterArtifacts": false
+    "createUpdaterArtifacts": true
   },
   "plugins": {
     "updater": {
       "endpoints": [
         "https://github.com/sanjay-m6/ASA-SERVER-MANAGER-2.0/releases/latest/download/latest.json"
       ],
-      "pubkey": ""
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDAxQUY5MzQ4NjM2NzM0NzMKUldSek5HZGpTSk92QVhRMEpXdlR0ZnJXYk5TSVN5dU4vREIrZlZFTVdTalJpVGVuTlVyK1pBemQK"
     }
   }
 }

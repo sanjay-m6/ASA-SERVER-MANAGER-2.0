@@ -482,7 +482,7 @@ pub async fn start_server(
         server_password,
         admin_password,
         ip_address,
-        cluster_id,
+        _cluster_id,
         cluster_name,
         cluster_path,
     ) = {
@@ -967,4 +967,195 @@ pub async fn start_log_watcher(
     });
 
     Ok(())
+}
+
+/// Import an existing server installation
+/// Reads settings from GameUserSettings.ini and creates a database entry
+#[tauri::command]
+pub async fn import_server(
+    state: State<'_, AppState>,
+    install_path: String,
+    name: String,
+) -> Result<Server, String> {
+    use std::fs;
+    
+    println!("📥 Importing server from: {}", install_path);
+    
+    let path = PathBuf::from(&install_path);
+    
+    // Validate that this looks like an ARK server installation
+    // We check for either:
+    // 1. The server executable (fully installed)
+    // 2. OR the ShooterGame folder (partially installed)
+    // 3. OR we just accept any folder (will auto-download on first start)
+    let exe_path = path
+        .join("ShooterGame")
+        .join("Binaries")
+        .join("Win64")
+        .join("ArkAscendedServer.exe");
+    
+    let shooter_game_path = path.join("ShooterGame");
+    
+    if exe_path.exists() {
+        println!("   ✅ Found server executable");
+    } else if shooter_game_path.exists() {
+        println!("   ⚠️  ShooterGame folder found but no executable - will auto-download on first start");
+    } else {
+        println!("   ⚠️  Empty folder - server will be downloaded on first start");
+    }
+
+
+    
+    // Read GameUserSettings.ini to extract settings
+    let config_path = path
+        .join("ShooterGame")
+        .join("Saved")
+        .join("Config")
+        .join("WindowsServer")
+        .join("GameUserSettings.ini");
+    
+    let mut max_players = 70;
+    let map_name = "TheIsland_WP".to_string();
+    let mut session_name = name.clone();
+    let mut server_password: Option<String> = None;
+    let mut admin_password = "admin123".to_string();
+    let mut game_port: u16 = 7777;
+    let mut query_port: u16 = 27015;
+    let mut rcon_port: u16 = 27020;
+    let mut rcon_enabled = true;
+    
+    if config_path.exists() {
+        if let Ok(content) = fs::read_to_string(&config_path) {
+            let mut current_section = String::new();
+            
+            for line in content.lines() {
+                let line = line.trim();
+                
+                // Section header
+                if line.starts_with('[') && line.ends_with(']') {
+                    current_section = line[1..line.len()-1].to_string();
+                    continue;
+                }
+                
+                // Key=Value pair
+                if let Some((key, value)) = line.split_once('=') {
+                    let key = key.trim();
+                    let value = value.trim();
+                    
+                    if current_section == "ServerSettings" || current_section == "/Script/ShooterGame.ShooterGameMode" {
+                        match key {
+                            "MaxPlayers" => max_players = value.parse().unwrap_or(70),
+                            "ServerPassword" if !value.is_empty() => server_password = Some(value.to_string()),
+                            "ServerAdminPassword" if !value.is_empty() => admin_password = value.to_string(),
+                            "SessionName" if !value.is_empty() => session_name = value.to_string(),
+                            "RCONEnabled" => rcon_enabled = value.to_lowercase() == "true",
+                            "RCONPort" => rcon_port = value.parse().unwrap_or(27020),
+                            _ => {}
+                        }
+                    }
+                    
+                    if current_section == "URL" || current_section == "/Script/Engine.GameSession" {
+                        match key {
+                            "Port" => game_port = value.parse().unwrap_or(7777),
+                            "QueryPort" => query_port = value.parse().unwrap_or(27015),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    println!("   Detected settings: Session={}, Map={}, MaxPlayers={}", session_name, map_name, max_players);
+    
+    // Create database entry
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db.get_connection().map_err(|e| e.to_string())?;
+    
+    // Check if this path is already registered
+    let exists: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM servers WHERE install_path = ?1)",
+            [&install_path],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+    
+    if exists {
+        return Err("A server with this installation path already exists.".to_string());
+    }
+    
+    // Ensure unique name
+    let mut unique_name = name.clone();
+    let mut counter = 1;
+    loop {
+        let name_exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM servers WHERE name = ?1)",
+                [&unique_name],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+        
+        if !name_exists {
+            break;
+        }
+        counter += 1;
+        unique_name = format!("{} ({})", name, counter);
+    }
+    
+    conn.execute(
+        "INSERT INTO servers (name, install_path, status, game_port, query_port, rcon_port, 
+         max_players, admin_password, server_password, map_name, session_name, rcon_enabled, server_type) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        rusqlite::params![
+            &unique_name,
+            &install_path,
+            "stopped",
+            game_port,
+            query_port,
+            rcon_port,
+            max_players,
+            &admin_password,
+            &server_password,
+            &map_name,
+            &session_name,
+            rcon_enabled,
+            "ASA",
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    
+    let id = conn.last_insert_rowid();
+    
+    println!("✅ Server imported with ID: {}", id);
+    
+    Ok(Server {
+        id,
+        name: unique_name.clone(),
+        install_path: PathBuf::from(install_path),
+        status: ServerStatus::Stopped,
+        ports: ServerPorts {
+            game_port,
+            query_port,
+            rcon_port,
+        },
+        config: ServerConfig {
+            max_players,
+            server_password,
+            admin_password: admin_password.clone(),
+            map_name,
+            session_name,
+            motd: None,
+            mods: vec![],
+            custom_args: None,
+        },
+        rcon_config: RconConfig {
+            enabled: rcon_enabled,
+            password: admin_password,
+        },
+        ip_address: None,
+        created_at: chrono::Utc::now().to_rfc3339(),
+        last_started: None,
+    })
 }

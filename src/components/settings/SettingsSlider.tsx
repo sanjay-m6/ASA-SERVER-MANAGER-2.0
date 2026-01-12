@@ -1,7 +1,8 @@
 
+import React from 'react';
 
 interface SettingsSliderProps {
-    label: string;
+    label: React.ReactNode;
     value: number;
     min: number;
     max: number;
@@ -19,7 +20,10 @@ export function SettingsSlider({
     description,
     onChange
 }: SettingsSliderProps) {
-    const percentage = ((value - min) / (max - min)) * 100;
+    // Dynamic max allows the slider to adapt if user types a value larger than default max
+    const effectiveMax = Math.max(max, value);
+    // Clamp percentage between 0 and 100 for visual bar
+    const percentage = Math.min(100, Math.max(0, ((value - min) / (effectiveMax - min)) * 100));
 
     return (
         <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50 hover:border-cyan-500/30 transition-colors">
@@ -29,14 +33,14 @@ export function SettingsSlider({
                     <input
                         type="number"
                         min={min}
-                        max={max}
+                        // Allow typing any number, don't clamp via max attribute on number input
                         step={step}
                         value={value}
                         onChange={(e) => {
                             const val = parseFloat(e.target.value);
                             if (!isNaN(val)) onChange(val);
                         }}
-                        className="bg-slate-900 border border-slate-700 rounded px-2 py-1 w-20 text-right text-cyan-400 font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                        className="bg-slate-900 border border-slate-700 rounded px-2 py-1 w-24 text-right text-cyan-400 font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
                     />
                 </div>
             </div>
@@ -45,20 +49,20 @@ export function SettingsSlider({
                 <p className="text-slate-400 text-sm mb-3">{description}</p>
             )}
 
-            <div className="relative">
-                <div className="absolute inset-0 h-2 bg-slate-700 rounded-full top-1/2 -translate-y-1/2" />
+            <div className="relative h-2 w-full">
+                <div className="absolute inset-0 h-2 bg-slate-700 rounded-full" />
                 <div
-                    className="absolute h-2 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full top-1/2 -translate-y-1/2"
+                    className="absolute h-2 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-300"
                     style={{ width: `${percentage}%` }}
                 />
                 <input
                     type="range"
                     min={min}
-                    max={max}
+                    max={effectiveMax}
                     step={step}
                     value={value}
                     onChange={(e) => onChange(parseFloat(e.target.value))}
-                    className="relative w-full h-2 appearance-none bg-transparent cursor-pointer z-10
+                    className="absolute inset-0 w-full h-2 appearance-none bg-transparent cursor-pointer z-10
                         [&::-webkit-slider-thumb]:appearance-none
                         [&::-webkit-slider-thumb]:w-5
                         [&::-webkit-slider-thumb]:h-5

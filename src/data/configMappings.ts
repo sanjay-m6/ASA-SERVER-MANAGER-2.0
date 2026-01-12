@@ -1,7 +1,7 @@
 // Configuration schema types and mappings for ARK Server settings
 // Enhanced with sliders, dropdowns, and categories for Visual Settings Manager
 
-export type FieldType = 'text' | 'number' | 'boolean' | 'slider' | 'dropdown';
+export type FieldType = 'text' | 'number' | 'boolean' | 'slider' | 'dropdown' | 'array';
 
 export interface ConfigField {
     section: string;
@@ -10,32 +10,40 @@ export interface ConfigField {
     type: FieldType;
     defaultValue?: string;
     description?: string;
+    wikiLink?: string;
     // Slider properties
     min?: number;
     max?: number;
     step?: number;
     // Dropdown options
     options?: { value: string; label: string; group?: string }[];
+    // Array properties
+    template?: Record<string, { label: string; placeholder: string }>;
 }
 
 export interface ConfigGroup {
     title: string;
     description?: string;
-    category: 'server' | 'gameplay' | 'player' | 'dino' | 'breeding' | 'structure' | 'pvp' | 'advanced';
+    category: 'server' | 'gameplay' | 'player' | 'dino' | 'breeding' | 'structure' | 'pvp' | 'rules' | 'chat' | 'transfers' | 'advanced';
     icon?: string;
+    source?: 'GameUserSettings' | 'Game';
     fields: ConfigField[];
 }
 
 // Category metadata for UI
+// Category metadata for UI
 export const CATEGORY_INFO: Record<string, { label: string; icon: string; color: string }> = {
     server: { label: 'Server', icon: '🖥️', color: 'from-blue-500 to-cyan-500' },
     gameplay: { label: 'Gameplay', icon: '🎮', color: 'from-purple-500 to-pink-500' },
-    player: { label: 'Player', icon: '👤', color: 'from-green-500 to-emerald-500' },
+    rules: { label: 'Rules', icon: '📜', color: 'from-rose-500 to-red-500' },
+    chat: { label: 'Chat & HUD', icon: '💬', color: 'from-green-500 to-teal-500' },
+    transfers: { label: 'Transfers', icon: '☁️', color: 'from-sky-500 to-blue-500' },
+    player: { label: 'Player', icon: '👤', color: 'from-indigo-500 to-violet-500' },
     dino: { label: 'Dinosaurs', icon: '🦖', color: 'from-orange-500 to-amber-500' },
     breeding: { label: 'Breeding', icon: '🥚', color: 'from-pink-500 to-rose-500' },
     structure: { label: 'Structures', icon: '🏠', color: 'from-slate-500 to-gray-500' },
-    pvp: { label: 'PvP/PvE', icon: '⚔️', color: 'from-red-500 to-orange-500' },
-    advanced: { label: 'Advanced', icon: '⚙️', color: 'from-violet-500 to-purple-500' },
+    pvp: { label: 'PvP/PvE', icon: '⚔️', color: 'from-red-600 to-orange-600' },
+    advanced: { label: 'Advanced', icon: '⚙️', color: 'from-slate-600 to-gray-600' },
 };
 
 // GameUserSettings.ini schema - Enhanced with sliders and categories
@@ -125,6 +133,30 @@ export const GAME_USER_SETTINGS_SCHEMA: ConfigGroup[] = [
                 description: 'Enable remote console access for server management'
             },
             {
+                section: 'URL',
+                key: 'Port',
+                label: 'Game Port',
+                type: 'slider',
+                defaultValue: '7777',
+                min: 1,
+                max: 65535,
+                step: 1,
+                description: 'Main game port for player connections (default: 7777)',
+                wikiLink: 'https://ark.wiki.gg/wiki/Server_configuration#URL'
+            },
+            {
+                section: 'URL',
+                key: 'QueryPort',
+                label: 'Query Port',
+                type: 'slider',
+                defaultValue: '27015',
+                min: 1,
+                max: 65535,
+                step: 1,
+                description: 'Port for server browser queries (default: 27015)',
+                wikiLink: 'https://ark.wiki.gg/wiki/Server_configuration#URL'
+            },
+            {
                 section: 'ServerSettings',
                 key: 'RCONPort',
                 label: 'RCON Port',
@@ -149,9 +181,10 @@ export const GAME_USER_SETTINGS_SCHEMA: ConfigGroup[] = [
                 type: 'slider',
                 defaultValue: '1.0',
                 min: 0.1,
-                max: 10,
+                max: 100,
                 step: 0.1,
-                description: 'Experience gain multiplier'
+                description: 'Global XP gain rate from all sources',
+                wikiLink: 'https://ark.wiki.gg/wiki/Server_configuration#ServerSettings'
             },
             {
                 section: 'ServerSettings',
@@ -501,11 +534,562 @@ export const GAME_USER_SETTINGS_SCHEMA: ConfigGroup[] = [
                 description: 'Prevent tribe members hurting each other'
             }
         ]
+    },
+    {
+        title: 'Chat & HUD',
+        description: 'Communication and display settings',
+        category: 'chat',
+        fields: [
+            {
+                section: 'ServerSettings',
+                key: 'GlobalVoiceChat',
+                label: 'Global Voice Chat',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Voice chat is heard by everyone'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'ProximityChat',
+                label: 'Proximity Text Chat',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Text chat only visible to nearby players'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'AlwaysNotifyPlayerLeft',
+                label: 'Notify Player Left',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Show message when player leaves'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'AlwaysNotifyPlayerJoined',
+                label: 'Notify Player Joined',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Show message when player joins'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'ServerCrosshair',
+                label: 'Enable Crosshair',
+                type: 'boolean',
+                defaultValue: 'True',
+                description: 'Show crosshair'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'ShowMapPlayerLocation',
+                label: 'Map Player Location',
+                type: 'boolean',
+                defaultValue: 'True',
+                description: 'Show player position on map'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'ShowFloatingDamageText',
+                label: 'Floating Damage Text',
+                type: 'boolean',
+                defaultValue: 'True',
+                description: 'Show damage numbers'
+            }
+        ]
+    },
+    {
+        title: 'Rules & Prevention',
+        description: 'Server rules and restrictions',
+        category: 'rules',
+        fields: [
+            {
+                section: 'ServerSettings',
+                key: 'AllowThirdPersonPlayer',
+                label: 'Allow Third Person',
+                type: 'boolean',
+                defaultValue: 'True',
+                description: 'Allow 3rd person camera'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'PreventDiseases',
+                label: 'Prevent Diseases',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Disable disease system'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'NonPermanentDiseases',
+                label: 'Non-Permanent Diseases',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Diseases cure on death'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'ForceAllStructureLocking',
+                label: 'Force Lock Structures',
+                type: 'boolean',
+                defaultValue: 'True',
+                description: 'Auto-lock all containers'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'AllowCrateSpawnsOnTopOfStructures',
+                label: 'Crates on Structures',
+                type: 'boolean',
+                defaultValue: 'True',
+                description: 'Allow supply crates on buildings'
+            }
+        ]
+    },
+    {
+        title: 'Transfers',
+        description: 'Cross-ARK download settings',
+        category: 'transfers',
+        fields: [
+            {
+                section: 'ServerSettings',
+                key: 'NoTributeDownloads',
+                label: 'Disable Downloads',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Disable all downloads'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'PreventDownloadSurvivors',
+                label: 'Block Survivor Downloads',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Prevent downloading characters'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'PreventDownloadItems',
+                label: 'Block Item Downloads',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Prevent downloading items'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'PreventDownloadDinos',
+                label: 'Block Dino Downloads',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Prevent downloading dinos'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'CrossARKAllowForeignDinoDownloads',
+                label: 'Allow Foreign Dinos',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Allow dinos from other maps'
+            }
+        ]
+    },
+    {
+        title: 'Breeding & Imprinting',
+        description: 'Baby care and imprinting mechanics',
+        category: 'breeding',
+        fields: [
+            {
+                section: 'ServerSettings',
+                key: 'AllowAnyoneBabyImprintCuddle',
+                label: 'Anyone Can Imprint',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Allow any tribe member to imprint babies'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'DisableImprintDinoBuff',
+                label: 'Disable Imprint Bonus',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Remove stat bonuses from imprinting'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'AllowRaidDinoFeeding',
+                label: 'Allow Raid Dino Feeding',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Enable feeding for tamed raid dinos'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'DisableDinoDecayPvE',
+                label: 'Disable Dino Decay (PvE)',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Prevent unclaimed dinos from decaying in PvE'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'AutoDestroyDecayedDinos',
+                label: 'Auto-Destroy Decayed Dinos',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Automatically remove fully decayed dinos'
+            }
+        ]
+    },
+    {
+        title: 'Structure Decay',
+        description: 'Building decay and auto-destruction',
+        category: 'structure',
+        fields: [
+            {
+                section: 'ServerSettings',
+                key: 'DisableStructureDecayPvE',
+                label: 'Disable Structure Decay',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Prevent structures from decaying'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'AutoDestroyOldStructuresMultiplier',
+                label: 'Auto-Destroy Multiplier',
+                type: 'slider',
+                defaultValue: '0',
+                min: 0,
+                max: 10,
+                step: 0.1,
+                description: 'Auto-destroy abandoned structures (0=off)'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'FastDecayUnsnappedCoreStructures',
+                label: 'Fast Decay Unsnapped',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Unsnapped foundations decay faster'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'OnlyDecayUnsnappedCoreStructures',
+                label: 'Only Decay Unsnapped',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Only unsnapped structures decay'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'OnlyAutoDestroyCoreStructures',
+                label: 'Only Auto-Destroy Core',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Only destroy foundations/pillars'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'DestroyUnconnectedWaterPipes',
+                label: 'Destroy Unconnected Pipes',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Remove pipes not connected to water'
+            }
+        ]
+    },
+    {
+        title: 'Combat & PvP',
+        description: 'Combat mechanics and PvP settings',
+        category: 'pvp',
+        fields: [
+            {
+                section: 'ServerSettings',
+                key: 'AllowHitMarkers',
+                label: 'Allow Hit Markers',
+                type: 'boolean',
+                defaultValue: 'True',
+                description: 'Show damage hit markers'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'AllowHideDamageSourceFromLogs',
+                label: 'Hide Damage Source',
+                type: 'boolean',
+                defaultValue: 'True',
+                description: 'Hide damage source in tribe logs'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'AllowMultipleAttachedC4',
+                label: 'Multiple C4',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Allow multiple C4 on same structure'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'EnablePvPGamma',
+                label: 'Enable PvP Gamma',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Allow gamma in PvP'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'DisablePvEGamma',
+                label: 'Disable PvE Gamma',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Block gamma command in PvE'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'DisableWeatherFog',
+                label: 'Disable Weather Fog',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Remove fog weather effects'
+            }
+        ]
+    },
+    {
+        title: 'Server Limits',
+        description: 'Tame limits and restrictions',
+        category: 'advanced',
+        fields: [
+            {
+                section: 'ServerSettings',
+                key: 'MaxTamedDinos',
+                label: 'Max Tamed Dinos',
+                type: 'slider',
+                defaultValue: '5000',
+                min: 0,
+                max: 10000,
+                step: 100,
+                description: 'Server-wide tame limit'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'MaxPersonalTamedDinos',
+                label: 'Max Personal Dinos',
+                type: 'slider',
+                defaultValue: '0',
+                min: 0,
+                max: 1000,
+                step: 10,
+                description: 'Per-player tame limit (0=unlimited)'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'MaxPlatformSaddleStructureLimit',
+                label: 'Platform Saddle Limit',
+                type: 'slider',
+                defaultValue: '75',
+                min: 0,
+                max: 500,
+                step: 5,
+                description: 'Max structures on platform saddles'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'PerPlatformMaxStructuresMultiplier',
+                label: 'Platform Structure Multiplier',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 10,
+                step: 0.1,
+                description: 'Multiplier for platform structure limits'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'MaxTributeItems',
+                label: 'Max Tribute Items',
+                type: 'slider',
+                defaultValue: '50',
+                min: 0,
+                max: 500,
+                step: 10,
+                description: 'Max items in tribute inventory'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'MaxTributeDinos',
+                label: 'Max Tribute Dinos',
+                type: 'slider',
+                defaultValue: '20',
+                min: 0,
+                max: 100,
+                step: 5,
+                description: 'Max dinos in tribute inventory'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'MaxTributeCharacters',
+                label: 'Max Tribute Characters',
+                type: 'slider',
+                defaultValue: '10',
+                min: 0,
+                max: 50,
+                step: 5,
+                description: 'Max characters in tribute inventory'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'KickIdlePlayersPeriod',
+                label: 'Kick Idle After (seconds)',
+                type: 'slider',
+                defaultValue: '3600',
+                min: 0,
+                max: 7200,
+                step: 300,
+                description: 'Kick players after idle time (0=disabled)'
+            }
+        ]
+    },
+    {
+        title: 'Quality of Life',
+        description: 'Convenience and gameplay features',
+        category: 'gameplay',
+        fields: [
+            {
+                section: 'ServerSettings',
+                key: 'AlwaysAllowStructurePickup',
+                label: 'Always Allow Pickup',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Always allow structure pickup (no timer)'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'OverrideStructurePlatformPrevention',
+                label: 'Override Platform Prevention',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Allow structures anywhere on platforms'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'AllowIntegratedSPlusStructures',
+                label: 'Allow S+ Structures',
+                type: 'boolean',
+                defaultValue: 'True',
+                description: 'Enable Structures Plus features'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'ClampResourceHarvestDamage',
+                label: 'Clamp Harvest Damage',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Limit harvest damage multipliers'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'ClampItemSpoilingTimes',
+                label: 'Clamp Spoiling Times',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Limit spoiling time changes'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'ClampItemStats',
+                label: 'Clamp Item Stats',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Limit item stat improvements'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'AutoSavePeriodMinutes',
+                label: 'Auto-Save Interval (minutes)',
+                type: 'slider',
+                defaultValue: '15',
+                min: 5,
+                max: 60,
+                step: 5,
+                description: 'How often to auto-save'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'ItemStackSizeMultiplier',
+                label: 'Stack Size Multiplier',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 10,
+                step: 0.1,
+                description: 'Multiply item stack sizes'
+            }
+        ]
     }
 ];
 
 // Game.ini schema - Enhanced with sliders and categories
 export const GAME_INI_SCHEMA: ConfigGroup[] = [
+    {
+        title: 'XP & Progression',
+        description: 'Experience and leveling multipliers',
+        category: 'gameplay',
+        fields: [
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'KillXPMultiplier',
+                label: 'Kill XP Multiplier',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 100,
+                step: 0.1,
+                description: 'XP gained from killing creatures'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'HarvestXPMultiplier',
+                label: 'Harvest XP Multiplier',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 100,
+                step: 0.1,
+                description: 'XP gained from harvesting resources'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'CraftXPMultiplier',
+                label: 'Craft XP Multiplier',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 100,
+                step: 0.1,
+                description: 'XP gained from crafting items'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'GenericXPMultiplier',
+                label: 'Generic XP Multiplier',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 100,
+                step: 0.1,
+                description: 'Multiplier for all other XP sources'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'SpecialXPMultiplier',
+                label: 'Special XP Multiplier',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 100,
+                step: 0.1,
+                description: 'Multiplier for special events'
+            }
+        ]
+    },
     {
         title: 'Breeding Speed',
         description: 'Egg hatching and baby maturation',
@@ -543,6 +1127,287 @@ export const GAME_INI_SCHEMA: ConfigGroup[] = [
                 max: 5,
                 step: 0.1,
                 description: 'Baby food consumption rate'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'BabyCuddleIntervalMultiplier',
+                label: 'Cuddle Interval Multiplier',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.01,
+                max: 10,
+                step: 0.01,
+                description: 'Time between cuddle requests'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'BabyCuddleGracePeriodMultiplier',
+                label: 'Cuddle Grace Period',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 10,
+                step: 0.1,
+                description: 'Extra time to complete cuddle'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'BabyCuddleLoseImprintQualitySpeedMultiplier',
+                label: 'Lose Imprint Speed',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0,
+                max: 10,
+                step: 0.1,
+                description: 'How fast imprint quality degrades if missed'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'BabyImprintAmountMultiplier',
+                label: 'Imprint Amount Multiplier',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 10,
+                step: 0.1,
+                description: 'Amount of imprint per cuddle'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'BabyImprintingStatScaleMultiplier',
+                label: 'Imprint Stat Bonus',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0,
+                max: 10,
+                step: 0.1,
+                description: 'Stat bonus from imprinting'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'LayEggIntervalMultiplier',
+                label: 'Lay Egg Interval',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 10,
+                step: 0.1,
+                description: 'Time between egg laying'
+            }
+        ]
+    },
+    {
+        title: 'Spoiling & Decay',
+        description: 'Item and corpse decay times',
+        category: 'advanced',
+        fields: [
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'GlobalSpoilingTimeMultiplier',
+                label: 'Spoiling Time Multiplier',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 100,
+                step: 0.1,
+                description: 'How fast items spoil'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'GlobalItemDecompositionTimeMultiplier',
+                label: 'Item Decomposition Time',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 10,
+                step: 0.1,
+                description: 'How fast dropped items despawn'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'GlobalCorpseDecompositionTimeMultiplier',
+                label: 'Corpse Decomposition Time',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 10,
+                step: 0.1,
+                description: 'How fast corpses disappear'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'CropGrowthSpeedMultiplier',
+                label: 'Crop Growth Speed',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 100,
+                step: 0.1,
+                description: 'How fast crops grow'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'CropDecaySpeedMultiplier',
+                label: 'Crop Decay Speed',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 10,
+                step: 0.1,
+                description: 'How fast crops decay'
+            }
+        ]
+    },
+    {
+        title: 'Advanced Gameplay',
+        description: 'Advanced server mechanics',
+        category: 'advanced',
+        fields: [
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'bAutoUnlockAllEngrams',
+                label: 'Auto-Unlock All Engrams',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Automatically unlock all engrams for players'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'bAllowFlyerSpeedLeveling',
+                label: 'Allow Flyer Speed Leveling',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Allow leveling movement speed on flyers (ASE only)'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'bAllowUnlimitedRespecs',
+                label: 'Unlimited Respecs',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Remove Mindwipe Tonic cooldown'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'bDisableDinoTaming',
+                label: 'Disable Taming',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Prevent all dino taming'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'bDisableDinoRiding',
+                label: 'Disable Riding',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Prevent riding tamed dinos'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'bDisableDinoBreeding',
+                label: 'Disable Breeding',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Prevent dino breeding'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'bUseSingleplayerSettings',
+                label: 'Use Singleplayer Settings',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Apply singleplayer balancing adjustments'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'bPvEDisableFriendlyFire',
+                label: 'PvE Disable Friendly Fire',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Prevent tribe members from hurting each other'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'bUseCorpseLocator',
+                label: 'Use Corpse Locator',
+                type: 'boolean',
+                defaultValue: 'True',
+                description: 'Show death marker on map'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'bAllowCustomRecipes',
+                label: 'Allow Custom Recipes',
+                type: 'boolean',
+                defaultValue: 'True',
+                description: 'Enable custom recipe creation'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'MaxNumberOfPlayersInTribe',
+                label: 'Max Tribe Members',
+                type: 'slider',
+                defaultValue: '0',
+                min: 0,
+                max: 100,
+                step: 1,
+                description: 'Maximum players per tribe (0=unlimited)'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'MaxTribeLogs',
+                label: 'Max Tribe Logs',
+                type: 'slider',
+                defaultValue: '400',
+                min: 100,
+                max: 10000,
+                step: 100,
+                description: 'Maximum tribe log entries'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'DinoTurretDamageMultiplier',
+                label: 'Dino Turret Damage',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 10,
+                step: 0.1,
+                description: 'Damage dinos take from turrets'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'DinoHarvestingDamageMultiplier',
+                label: 'Dino Harvesting Damage',
+                type: 'slider',
+                defaultValue: '3.2',
+                min: 0.1,
+                max: 10,
+                step: 0.1,
+                description: 'Harvesting damage multiplier for dinos'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'FishingLootQualityMultiplier',
+                label: 'Fishing Loot Quality',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 10,
+                step: 0.1,
+                description: 'Quality of fishing loot'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'CraftingSkillBonusMultiplier',
+                label: 'Crafting Skill Bonus',
+                type: 'slider',
+                defaultValue: '1',
+                min: 0.1,
+                max: 10,
+                step: 0.1,
+                description: 'Bonus from crafting skill stat'
             }
         ]
     },
@@ -707,6 +1572,19 @@ export const GAME_INI_SCHEMA: ConfigGroup[] = [
         fields: [
             {
                 section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'PerDinoClassResistanceMultipliers',
+                label: 'Dino Resistance Multipliers',
+                type: 'array',
+                defaultValue: '',
+                description: 'Adjust resistance for specific dino classes (lower = more resistant)',
+                wikiLink: 'https://ark.wiki.gg/wiki/Server_configuration#PerDinoClassResistanceMultipliers',
+                template: {
+                    ClassName: { label: 'Dino Class Name', placeholder: 'DinoCharacterBP_C' },
+                    Multiplier: { label: 'Resistance Multiplier', placeholder: '0.5' }
+                }
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
                 key: 'bAllowUnlimitedRespecs',
                 label: 'Unlimited Mindwipes',
                 type: 'boolean',
@@ -750,10 +1628,10 @@ export const GAME_INI_SCHEMA: ConfigGroup[] = [
 ];
 
 // Helper to get all config groups for a specific category
-export function getGroupsByCategory(category: string): ConfigGroup[] {
+export function getGroupsByCategory(category: string) {
     return [
-        ...GAME_USER_SETTINGS_SCHEMA.filter(g => g.category === category),
-        ...GAME_INI_SCHEMA.filter(g => g.category === category)
+        ...GAME_USER_SETTINGS_SCHEMA.filter(g => g.category === category).map(g => ({ ...g, source: 'GameUserSettings' as const })),
+        ...GAME_INI_SCHEMA.filter(g => g.category === category).map(g => ({ ...g, source: 'Game' as const }))
     ];
 }
 

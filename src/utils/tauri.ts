@@ -92,6 +92,10 @@ export async function cloneServer(serverId: number): Promise<Server> {
     return await invoke('clone_server', { sourceServerId: serverId });
 }
 
+export async function importServer(installPath: string, name: string): Promise<Server> {
+    return await invoke('import_server', { installPath, name });
+}
+
 export async function transferSettings(sourceServerId: number, targetServerId: number): Promise<void> {
     return await invoke('transfer_settings', { sourceServerId, targetServerId });
 }

@@ -3,6 +3,7 @@ import { Plus, Play, Square, RotateCw, Trash2, Download, Settings, Terminal, Glo
 import { useServerStore } from '../stores/serverStore';
 import { cn } from '../utils/helpers';
 import InstallServerDialog from '../components/server/InstallServerDialog';
+import ImportServerDialog from '../components/server/ImportServerDialog';
 import CloneOptionsModal from '../components/server/CloneOptionsModal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { startServer, stopServer, restartServer, deleteServer, getAllServers, updateServer, startLogWatcher, cloneServer, transferSettings, extractSaveData } from '../utils/tauri';
@@ -29,6 +30,7 @@ export default function ServerManager() {
     const [appVersion, setAppVersion] = useState<string>('');
     const [cloneModalServer, setCloneModalServer] = useState<Server | null>(null);
     const [deleteConfirmServer, setDeleteConfirmServer] = useState<Server | null>(null);
+    const [showImportDialog, setShowImportDialog] = useState(false);
 
 
     useEffect(() => {
@@ -194,13 +196,22 @@ export default function ServerManager() {
                     </h1>
                     <p className="text-slate-400 mt-2 text-lg">Deploy and manage your ARK instances</p>
                 </div>
-                <button
-                    onClick={() => setShowInstallDialog(true)}
-                    className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white rounded-xl transition-all shadow-lg shadow-sky-500/20 font-medium group"
-                >
-                    <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
-                    <span>Deploy Server</span>
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setShowImportDialog(true)}
+                        className="flex items-center space-x-2 px-5 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-all font-medium"
+                    >
+                        <Download className="w-5 h-5" />
+                        <span>Import Existing</span>
+                    </button>
+                    <button
+                        onClick={() => setShowInstallDialog(true)}
+                        className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white rounded-xl transition-all shadow-lg shadow-sky-500/20 font-medium group"
+                    >
+                        <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
+                        <span>Deploy Server</span>
+                    </button>
+                </div>
             </div>
 
             {/* Server List */}
@@ -469,6 +480,11 @@ export default function ServerManager() {
             {/* Install Server Dialog */}
             {showInstallDialog && (
                 <InstallServerDialog onClose={() => setShowInstallDialog(false)} />
+            )}
+
+            {/* Import Server Dialog */}
+            {showImportDialog && (
+                <ImportServerDialog onClose={() => setShowImportDialog(false)} />
             )}
 
             {/* Clone Options Modal */}

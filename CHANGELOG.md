@@ -2,6 +2,20 @@
 
 All notable changes to ASA Server Manager will be documented in this file.
 
+## [2.1.2] - 2026-01-13
+
+### 🔧 Bug Fixes
+- Fixed GitHub Actions workflow to use `tauri-apps/tauri-action@v0` (v2 doesn't exist)
+
+### ✨ New Features
+- **Preset Selector** - Quick configuration presets for different server types
+- **Array Editor** - Edit array-based config values with intuitive UI
+- **Config Tooltips** - Hover tooltips with descriptions for settings
+- **Code Editor** - Improved code editing component
+- **Import Server Dialog** - Import existing ARK server installations
+
+---
+
 ## [2.1.0] - 2026-01-11
 
 ### ✨ New Features

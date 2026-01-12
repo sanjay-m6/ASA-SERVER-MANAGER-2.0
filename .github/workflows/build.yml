@@ -14,6 +14,8 @@ env:
 jobs:
   build:
     runs-on: windows-latest
+    # Only run on push events or PRs from the same repo (not forks) where secrets are available
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: write
     

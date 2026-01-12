@@ -55,10 +55,11 @@ jobs:
             Download the `.msi` installer for Windows.
             
             ## Auto-Update
-            If you have v2.1.1+, you'll receive an in-app notification to update automatically!
+            If you have v2.1.2+, you'll receive an in-app notification to update automatically!
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
+          args: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY == '' && '--no-sign' || '' }}
 
 
   lint:

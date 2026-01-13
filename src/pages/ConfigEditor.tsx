@@ -148,10 +148,25 @@ const ConfigInput = ({
                         template={field.template || {}}
                     />
                     {field.description && (
-                         <div className="mt-2 text-xs text-slate-500 px-1 italic">
-                             {field.description}
-                         </div>
+                        <div className="mt-2 text-xs text-slate-500 px-1 italic">
+                            {field.description}
+                        </div>
                     )}
+                </div>
+            );
+        case 'textarea':
+            return (
+                <div className="col-span-1 md:col-span-2 lg:col-span-2">
+                    <Container>
+                        <Label />
+                        <textarea
+                            value={value}
+                            onChange={(e) => onChange(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white focus:ring-1 focus:ring-cyan-500 outline-none font-mono text-sm min-h-[150px]"
+                            placeholder="Enter values, one per line..."
+                        />
+                        {field.description && <div className="mt-2 text-sm text-slate-400">{field.description}</div>}
+                    </Container>
                 </div>
             );
         default:

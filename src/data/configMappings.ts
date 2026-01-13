@@ -1,7 +1,7 @@
 // Configuration schema types and mappings for ARK Server settings
 // Enhanced with sliders, dropdowns, and categories for Visual Settings Manager
 
-export type FieldType = 'text' | 'number' | 'boolean' | 'slider' | 'dropdown' | 'array';
+export type FieldType = 'text' | 'number' | 'boolean' | 'slider' | 'dropdown' | 'array' | 'textarea';
 
 export interface ConfigField {
     section: string;
@@ -1522,6 +1522,15 @@ export const GAME_INI_SCHEMA: ConfigGroup[] = [
                 type: 'text',
                 defaultValue: '',
                 description: 'Custom XP curve (array)'
+            },
+            {
+                section: '/Script/ShooterGame.ShooterGameMode',
+                key: 'OverridePlayerLevelEngramPoints',
+                label: 'Engram Points Per Level',
+                type: 'textarea',
+                defaultValue: '',
+                description: 'Engram points granted for each level up. Enter one value per line.',
+                wikiLink: 'https://ark.wiki.gg/wiki/Server_configuration#OverridePlayerLevelEngramPoints'
             }
         ]
     },
@@ -1645,6 +1654,7 @@ export function getAllCategories(): { category: string; info: typeof CATEGORY_IN
 }
 
 // Parse INI content into key-value map
+// Handles duplicate keys by joining values with \n
 export function parseIniContent(content: string): Map<string, Map<string, string>> {
     const sections = new Map<string, Map<string, string>>();
     let currentSection = '';
@@ -1658,8 +1668,20 @@ export function parseIniContent(content: string): Map<string, Map<string, string
             }
         } else if (trimmed.includes('=') && currentSection) {
             const [key, ...valueParts] = trimmed.split('=');
-            const value = valueParts.join('=');
-            sections.get(currentSection)?.set(key.trim(), value.trim());
+            const cleanKey = key.trim();
+            const value = valueParts.join('='); // Rejoin value in case it contained =
+            const cleanValue = value.trim();
+
+            const sectionMap = sections.get(currentSection);
+            if (sectionMap) {
+                if (sectionMap.has(cleanKey)) {
+                    // Key already exists, this is a duplicate (multiline)
+                    const existingValue = sectionMap.get(cleanKey);
+                    sectionMap.set(cleanKey, existingValue + '\n' + cleanValue);
+                } else {
+                    sectionMap.set(cleanKey, cleanValue);
+                }
+            }
         }
     }
 
@@ -1667,13 +1689,24 @@ export function parseIniContent(content: string): Map<string, Map<string, string
 }
 
 // Generate INI content from sections map
+// Handles multiline values (containing \n) by splitting into duplicate keys
 export function generateIniContent(sections: Map<string, Map<string, string>>): string {
     let content = '';
 
     for (const [section, values] of sections) {
         content += `[${section}]\n`;
         for (const [key, value] of values) {
-            content += `${key}=${value}\n`;
+            if (value.includes('\n')) {
+                // Handle multiline values as duplicates
+                const parts = value.split('\n');
+                for (const part of parts) {
+                    if (part.trim()) {
+                        content += `${key}=${part.trim()}\n`;
+                    }
+                }
+            } else {
+                content += `${key}=${value}\n`;
+            }
         }
         content += '\n';
     }

@@ -129,6 +129,10 @@ export async function startLogWatcher(serverId: number, installPath: string): Pr
     return await invoke('start_log_watcher', { serverId, installPath });
 }
 
+export async function showServerConsole(serverId: number): Promise<void> {
+    return await invoke('show_server_console', { serverId });
+}
+
 // ============================================================================
 // Mod Commands
 // ============================================================================
@@ -188,6 +192,10 @@ export async function applyModsToServer(serverId: number): Promise<ModConfigPrev
 
 export async function getModInstallInstructions(): Promise<string[]> {
     return await invoke('get_mod_install_instructions');
+}
+
+export async function hardcoreRetryMods(serverId: number): Promise<void> {
+    return await invoke('hardcore_retry_mods', { serverId });
 }
 
 // ============================================================================

@@ -405,9 +405,41 @@ pub async fn start_cluster(state: State<'_, AppState>, cluster_id: i64) -> Resul
         ip_address,
     ) in servers
     {
+        // Get enabled mods for this server
+        let enabled_mods: Vec<String> = {
+            let db = state.db.lock().map_err(|e| e.to_string())?;
+            let conn = db.get_connection().map_err(|e| e.to_string())?;
+
+            let mut stmt = conn.prepare(
+                "SELECT mod_id FROM mods WHERE server_id = ?1 AND enabled = 1 ORDER BY load_order ASC"
+            ).map_err(|e| e.to_string())?;
+
+            let mut rows = stmt.query([server_id]).map_err(|e| e.to_string())?;
+            let mut mods = Vec::new();
+            while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+                if let Ok(mod_id) = row.get::<_, String>(0) {
+                    mods.push(mod_id);
+                }
+            }
+            mods
+        };
+
+        if !enabled_mods.is_empty() {
+            println!(
+                "  🧩 Found {} enabled mods for server {}",
+                enabled_mods.len(),
+                server_id
+            );
+        }
+
         let install_path = PathBuf::from(&install_path);
         let server_password_ref = server_password.as_deref();
         let ip_address_ref = ip_address.as_deref();
+        let mods_option = if enabled_mods.is_empty() {
+            None
+        } else {
+            Some(enabled_mods.as_slice())
+        };
 
         if let Err(e) = state.process_manager.start_server(
             server_id,
@@ -424,6 +456,7 @@ pub async fn start_cluster(state: State<'_, AppState>, cluster_id: i64) -> Resul
             ip_address_ref,
             Some(&cluster_name),
             Some(&cluster_path),
+            mods_option,
         ) {
             println!("  ⚠️ Failed to start server {}: {}", server_id, e);
         } else {

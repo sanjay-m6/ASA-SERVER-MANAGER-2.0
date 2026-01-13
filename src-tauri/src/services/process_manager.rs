@@ -41,6 +41,28 @@ mod window_hider {
             EnumWindows(Some(enum_windows_callback), 0);
         }
     }
+
+    pub fn show_process_window(pid: u32) {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{SetForegroundWindow, SW_SHOW};
+
+        unsafe extern "system" fn show_window_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+            let pid_ptr = lparam as *const u32;
+            let target_pid = *pid_ptr;
+            let mut window_pid: u32 = 0;
+            GetWindowThreadProcessId(hwnd, &mut window_pid);
+
+            if window_pid == target_pid {
+                ShowWindow(hwnd, SW_SHOW);
+                SetForegroundWindow(hwnd);
+                return 0; // Stop enumerating
+            }
+            1
+        }
+
+        unsafe {
+            EnumWindows(Some(show_window_callback), &pid as *const _ as LPARAM);
+        }
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -85,6 +107,7 @@ impl ProcessManager {
         ip_address: Option<&str>,
         cluster_id: Option<&str>,
         cluster_dir: Option<&str>,
+        mods: Option<&[String]>,
     ) -> Result<()> {
         let executable = install_path
             .join("ShooterGame")
@@ -143,6 +166,22 @@ impl ProcessManager {
                 );
             }
         }
+
+        // Add mods if any are enabled
+        if let Some(mod_list) = mods {
+            if !mod_list.is_empty() {
+                let mods_string = mod_list.join(",");
+                args.push(format!("-mods={}", mods_string));
+                println!(
+                    "  🧩 Server {} loading {} mods: {}",
+                    server_id,
+                    mod_list.len(),
+                    mods_string
+                );
+            }
+        }
+
+        println!("  🚀 Executing Command: {:?} {:?}", executable, args);
 
         let mut command = Command::new(&executable);
         command
@@ -310,6 +349,7 @@ impl ProcessManager {
         ip_address: Option<&str>,
         cluster_id: Option<&str>,
         cluster_dir: Option<&str>,
+        mods: Option<&[String]>,
     ) -> Result<()> {
         if self.is_running(server_id) {
             self.stop_server(server_id)?;
@@ -332,6 +372,22 @@ impl ProcessManager {
             ip_address,
             cluster_id,
             cluster_dir,
+            mods,
         )
+    }
+
+    /// Show the hidden server window
+    pub fn show_server_window(&self, server_id: i64) -> Result<()> {
+        let processes = self.processes.lock().unwrap();
+        if let Some(server_proc) = processes.get(&server_id) {
+            let pid = server_proc.child.id();
+            #[cfg(target_os = "windows")]
+            {
+                window_hider::show_process_window(pid);
+            }
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Server is not running"))
+        }
     }
 }

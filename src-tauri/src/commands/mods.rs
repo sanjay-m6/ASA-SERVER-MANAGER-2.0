@@ -573,3 +573,105 @@ pub async fn get_mod_install_instructions() -> Result<Vec<String>, String> {
         "• Check that mods are compatible with current game version".to_string(),
     ])
 }
+/// Delete the mod download cache (.temp folder)
+fn delete_mod_cache(install_path: &PathBuf) -> Result<(), String> {
+    let temp_dir = install_path
+        .join("ShooterGame/Binaries/Win64/ShooterGame/Mods/.temp");
+
+    if temp_dir.exists() {
+        println!("🗑️ removing mod cache at {:?}", temp_dir);
+        std::fs::remove_dir_all(&temp_dir).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn hardcore_retry_mods(
+    state: State<'_, AppState>,
+    server_id: i64,
+) -> Result<(), String> {
+    println!("☢️ Hardcore Mod Retry initiated for server {}", server_id);
+
+    // 1. Fetch Server Details & Config
+    let (install_path, session_name, map_name, game_port, query_port, rcon_port, max_players, server_password, admin_password, ip_address, cluster_id, cluster_dir) = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db.get_connection().map_err(|e| e.to_string())?;
+        
+        conn.query_row(
+            "SELECT install_path, session_name, map_name, game_port, query_port, rcon_port, max_players, server_password, admin_password, ip_address, cluster_id, cluster_dir 
+             FROM servers WHERE id = ?1",
+            [server_id],
+            |row| Ok((
+                row.get::<_, String>(0)?, // install_path
+                row.get::<_, String>(1)?, // session_name
+                row.get::<_, String>(2)?, // map_name
+                row.get::<_, i32>(3)?,    // game_port
+                row.get::<_, i32>(4)?,    // query_port
+                row.get::<_, i32>(5)?,    // rcon_port
+                row.get::<_, i32>(6)?,    // max_players
+                row.get::<_, Option<String>>(7)?, // server_password
+                row.get::<_, String>(8)?, // admin_password
+                row.get::<_, Option<String>>(9)?, // ip_address
+                row.get::<_, Option<String>>(10)?, // cluster_id
+                row.get::<_, Option<String>>(11)?, // cluster_dir
+            )),
+        ).map_err(|e| e.to_string())?
+    };
+
+    let path_buf = PathBuf::from(&install_path);
+
+    // 2. Stop Server
+    println!("  ⏹️ Stopping server...");
+    state.process_manager.stop_server(server_id).map_err(|e| e.to_string())?;
+    
+    // Wait a bit to ensure file handles are released
+    std::thread::sleep(std::time::Duration::from_secs(3));
+
+    // 3. Delete Cache
+    println!("  🧹 Clearing mod cache...");
+    delete_mod_cache(&path_buf)?;
+
+    // 4. Get Enabled Mods (for restart)
+    let enabled_mods: Vec<String> = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db.get_connection().map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare(
+            "SELECT mod_id FROM mods WHERE server_id = ?1 AND enabled = 1 ORDER BY load_order ASC"
+        ).map_err(|e| e.to_string())?;
+
+        let ids: Vec<String> = stmt.query_map([server_id], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+        ids
+    };
+
+    let mods_option = if enabled_mods.is_empty() {
+        None
+    } else {
+        Some(enabled_mods.as_slice())
+    };
+
+    // 5. Start Server
+    println!("  🚀 Restarting server...");
+    state.process_manager.start_server(
+        server_id,
+        "ASA", // Assuming ASA for now as this is mod related
+        &path_buf,
+        &map_name,
+        &session_name,
+        game_port as u16,
+        query_port as u16,
+        rcon_port as u16,
+        max_players,
+        server_password.as_deref(),
+        &admin_password,
+        ip_address.as_deref(),
+        cluster_id.as_deref(),
+        cluster_dir.as_deref(),
+        mods_option
+    ).map_err(|e| e.to_string())?;
+
+    println!("  ✅ Hardcore retry complete!");
+    Ok(())
+}

@@ -88,6 +88,15 @@ pub async fn get_server_by_id(
 }
 
 #[tauri::command]
+pub async fn show_server_console(
+    state: State<'_, AppState>,
+    server_id: i64,
+) -> Result<(), String> {
+    println!("🖥️ Showing console for server {}", server_id);
+    state.process_manager.show_server_window(server_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn install_server(
     app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -379,8 +388,7 @@ pub async fn transfer_settings(
         let src = source_config.join(file);
         let dst = target_config.join(file);
         if src.exists() {
-            std::fs::copy(&src, &dst)
-                .map_err(|e| format!("Failed to copy {}: {}", file, e))?;
+            std::fs::copy(&src, &dst).map_err(|e| format!("Failed to copy {}: {}", file, e))?;
             println!("  ✅ Copied {}", file);
         }
     }
@@ -518,6 +526,33 @@ pub async fn start_server(
         .map_err(|e| format!("Server not found: {}", e))?
     };
 
+    // Get enabled mods for this server
+    let enabled_mods: Vec<String> = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db.get_connection().map_err(|e| e.to_string())?;
+
+        let mut stmt = conn.prepare(
+            "SELECT mod_id FROM mods WHERE server_id = ?1 AND enabled = 1 ORDER BY load_order ASC"
+        ).map_err(|e| e.to_string())?;
+
+        let mut rows = stmt.query([server_id]).map_err(|e| e.to_string())?;
+        let mut mods = Vec::new();
+        while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            if let Ok(mod_id) = row.get::<_, String>(0) {
+                mods.push(mod_id);
+            }
+        }
+        mods
+    };
+
+    if !enabled_mods.is_empty() {
+        println!(
+            "  🧩 Found {} enabled mods for server {}",
+            enabled_mods.len(),
+            server_id
+        );
+    }
+
     let install_path_buf = PathBuf::from(&install_path);
 
     // Check if server executable exists
@@ -549,7 +584,13 @@ pub async fn start_server(
         println!("  ✅ Server download complete, now starting...");
     }
 
-    // Start the server process
+    // Start the server process with mods
+    let mods_option = if enabled_mods.is_empty() {
+        None
+    } else {
+        Some(enabled_mods.as_slice())
+    };
+
     state
         .process_manager
         .start_server(
@@ -567,6 +608,7 @@ pub async fn start_server(
             ip_address.as_deref(),
             cluster_name.as_deref(),
             cluster_path.as_deref(),
+            mods_option,
         )
         .map_err(|e| e.to_string())?;
 
@@ -657,7 +699,40 @@ pub async fn restart_server(state: State<'_, AppState>, server_id: i64) -> Resul
         .map_err(|e| format!("Server not found: {}", e))?
     };
 
-    // Restart the server
+    // Get enabled mods for this server
+    let enabled_mods: Vec<String> = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db.get_connection().map_err(|e| e.to_string())?;
+
+        let mut stmt = conn.prepare(
+            "SELECT mod_id FROM mods WHERE server_id = ?1 AND enabled = 1 ORDER BY load_order ASC"
+        ).map_err(|e| e.to_string())?;
+
+        let mut rows = stmt.query([server_id]).map_err(|e| e.to_string())?;
+        let mut mods = Vec::new();
+        while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            if let Ok(mod_id) = row.get::<_, String>(0) {
+                mods.push(mod_id);
+            }
+        }
+        mods
+    };
+
+    if !enabled_mods.is_empty() {
+        println!(
+            "  🧩 Found {} enabled mods for server {}",
+            enabled_mods.len(),
+            server_id
+        );
+    }
+
+    // Restart the server with mods
+    let mods_option = if enabled_mods.is_empty() {
+        None
+    } else {
+        Some(enabled_mods.as_slice())
+    };
+
     state
         .process_manager
         .restart_server(
@@ -675,6 +750,7 @@ pub async fn restart_server(state: State<'_, AppState>, server_id: i64) -> Resul
             ip_address.as_deref(),
             cluster_name.as_deref(),
             cluster_path.as_deref(),
+            mods_option,
         )
         .map_err(|e| e.to_string())?;
 
@@ -978,11 +1054,11 @@ pub async fn import_server(
     name: String,
 ) -> Result<Server, String> {
     use std::fs;
-    
+
     println!("📥 Importing server from: {}", install_path);
-    
+
     let path = PathBuf::from(&install_path);
-    
+
     // Validate that this looks like an ARK server installation
     // We check for either:
     // 1. The server executable (fully installed)
@@ -993,19 +1069,19 @@ pub async fn import_server(
         .join("Binaries")
         .join("Win64")
         .join("ArkAscendedServer.exe");
-    
+
     let shooter_game_path = path.join("ShooterGame");
-    
+
     if exe_path.exists() {
         println!("   ✅ Found server executable");
     } else if shooter_game_path.exists() {
-        println!("   ⚠️  ShooterGame folder found but no executable - will auto-download on first start");
+        println!(
+            "   ⚠️  ShooterGame folder found but no executable - will auto-download on first start"
+        );
     } else {
         println!("   ⚠️  Empty folder - server will be downloaded on first start");
     }
 
-
-    
     // Read GameUserSettings.ini to extract settings
     let config_path = path
         .join("ShooterGame")
@@ -1013,7 +1089,7 @@ pub async fn import_server(
         .join("Config")
         .join("WindowsServer")
         .join("GameUserSettings.ini");
-    
+
     let mut max_players = 70;
     let map_name = "TheIsland_WP".to_string();
     let mut session_name = name.clone();
@@ -1023,37 +1099,43 @@ pub async fn import_server(
     let mut query_port: u16 = 27015;
     let mut rcon_port: u16 = 27020;
     let mut rcon_enabled = true;
-    
+
     if config_path.exists() {
         if let Ok(content) = fs::read_to_string(&config_path) {
             let mut current_section = String::new();
-            
+
             for line in content.lines() {
                 let line = line.trim();
-                
+
                 // Section header
                 if line.starts_with('[') && line.ends_with(']') {
-                    current_section = line[1..line.len()-1].to_string();
+                    current_section = line[1..line.len() - 1].to_string();
                     continue;
                 }
-                
+
                 // Key=Value pair
                 if let Some((key, value)) = line.split_once('=') {
                     let key = key.trim();
                     let value = value.trim();
-                    
-                    if current_section == "ServerSettings" || current_section == "/Script/ShooterGame.ShooterGameMode" {
+
+                    if current_section == "ServerSettings"
+                        || current_section == "/Script/ShooterGame.ShooterGameMode"
+                    {
                         match key {
                             "MaxPlayers" => max_players = value.parse().unwrap_or(70),
-                            "ServerPassword" if !value.is_empty() => server_password = Some(value.to_string()),
-                            "ServerAdminPassword" if !value.is_empty() => admin_password = value.to_string(),
+                            "ServerPassword" if !value.is_empty() => {
+                                server_password = Some(value.to_string())
+                            }
+                            "ServerAdminPassword" if !value.is_empty() => {
+                                admin_password = value.to_string()
+                            }
                             "SessionName" if !value.is_empty() => session_name = value.to_string(),
                             "RCONEnabled" => rcon_enabled = value.to_lowercase() == "true",
                             "RCONPort" => rcon_port = value.parse().unwrap_or(27020),
                             _ => {}
                         }
                     }
-                    
+
                     if current_section == "URL" || current_section == "/Script/Engine.GameSession" {
                         match key {
                             "Port" => game_port = value.parse().unwrap_or(7777),
@@ -1065,13 +1147,16 @@ pub async fn import_server(
             }
         }
     }
-    
-    println!("   Detected settings: Session={}, Map={}, MaxPlayers={}", session_name, map_name, max_players);
-    
+
+    println!(
+        "   Detected settings: Session={}, Map={}, MaxPlayers={}",
+        session_name, map_name, max_players
+    );
+
     // Create database entry
     let db = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db.get_connection().map_err(|e| e.to_string())?;
-    
+
     // Check if this path is already registered
     let exists: bool = conn
         .query_row(
@@ -1080,11 +1165,11 @@ pub async fn import_server(
             |row| row.get(0),
         )
         .unwrap_or(false);
-    
+
     if exists {
         return Err("A server with this installation path already exists.".to_string());
     }
-    
+
     // Ensure unique name
     let mut unique_name = name.clone();
     let mut counter = 1;
@@ -1096,14 +1181,14 @@ pub async fn import_server(
                 |row| row.get(0),
             )
             .unwrap_or(false);
-        
+
         if !name_exists {
             break;
         }
         counter += 1;
         unique_name = format!("{} ({})", name, counter);
     }
-    
+
     conn.execute(
         "INSERT INTO servers (name, install_path, status, game_port, query_port, rcon_port, 
          max_players, admin_password, server_password, map_name, session_name, rcon_enabled, server_type) 
@@ -1125,11 +1210,11 @@ pub async fn import_server(
         ],
     )
     .map_err(|e| e.to_string())?;
-    
+
     let id = conn.last_insert_rowid();
-    
+
     println!("✅ Server imported with ID: {}", id);
-    
+
     Ok(Server {
         id,
         name: unique_name.clone(),

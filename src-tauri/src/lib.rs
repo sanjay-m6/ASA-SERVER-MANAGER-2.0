@@ -105,6 +105,7 @@ pub fn run() {
             commands::server::check_server_reachability,
             commands::server::start_log_watcher,
             commands::server::import_server,
+            commands::server::show_server_console,
             // Mod commands
             commands::mods::search_mods,
             commands::mods::get_mod_description,
@@ -118,6 +119,7 @@ pub fn run() {
             commands::mods::generate_mod_config,
             commands::mods::apply_mods_to_server,
             commands::mods::get_mod_install_instructions,
+            commands::mods::hardcore_retry_mods,
             // Config commands
             commands::config::read_config,
             commands::config::save_config,

@@ -1,9 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Save, Key, Lock, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
+import { Save, Key, Lock, CheckCircle, AlertCircle, ExternalLink, RefreshCw, Download, Clock, History, Undo2 } from 'lucide-react';
 import { getSetting, setSetting } from '../utils/tauri';
 import toast from 'react-hot-toast';
 import { invoke } from '@tauri-apps/api/core';
 import DiagnosticsPanel from '../components/settings/DiagnosticsPanel';
+import { manualCheckForUpdates, getCurrentVersion } from '../components/UpdateChecker';
+import {
+    getUpdateSettings,
+    setUpdateSettings,
+    getUpdateHistory,
+    clearSkippedVersions,
+    getReleasesUrl,
+    formatRelativeTime,
+    type UpdateSettings,
+    type UpdateHistoryEntry
+} from '../utils/updateHistory';
 
 export default function Settings() {
     const [curseforgeApiKey, setCurseforgeApiKey] = useState('');
@@ -13,7 +24,13 @@ export default function Settings() {
     const [showCurseforgeKey, setShowCurseforgeKey] = useState(false);
     const [showSteamKey, setShowSteamKey] = useState(false);
 
-    const [activeTab, setActiveTab] = useState<'api' | 'network'>('api');
+    const [activeTab, setActiveTab] = useState<'api' | 'network' | 'updates'>('api');
+
+    // Update system state
+    const [updateSettings, setUpdateSettingsState] = useState<UpdateSettings | null>(null);
+    const [updateHistory, setUpdateHistoryState] = useState<UpdateHistoryEntry[]>([]);
+    const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+    const [updateCheckResult, setUpdateCheckResult] = useState<string | null>(null);
 
     useEffect(() => {
         loadSettings();
@@ -36,12 +53,50 @@ export default function Settings() {
             ]);
             if (curseforgeKey) setCurseforgeApiKey(curseforgeKey);
             if (steamKey) setSteamApiKey(steamKey);
+
+            // Load update settings
+            setUpdateSettingsState(getUpdateSettings());
+            setUpdateHistoryState(getUpdateHistory());
         } catch (error) {
             console.error('Failed to load settings:', error);
             toast.error('Failed to load settings');
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleCheckForUpdates = async () => {
+        setIsCheckingUpdates(true);
+        setUpdateCheckResult(null);
+        try {
+            const result = await manualCheckForUpdates();
+            if (result.available && result.update) {
+                setUpdateCheckResult(`Update available: v${result.update.version}`);
+                toast.success(`Update v${result.update.version} is available!`);
+            } else if (result.error) {
+                setUpdateCheckResult(result.error);
+                toast.error(result.error);
+            } else {
+                setUpdateCheckResult('You are on the latest version!');
+                toast.success('You are on the latest version!');
+            }
+        } catch (err) {
+            setUpdateCheckResult('Failed to check for updates');
+            toast.error('Failed to check for updates');
+        } finally {
+            setIsCheckingUpdates(false);
+        }
+    };
+
+    const handleUpdateIntervalChange = (interval: UpdateSettings['checkInterval']) => {
+        setUpdateSettings({ checkInterval: interval });
+        setUpdateSettingsState(getUpdateSettings());
+        toast.success(`Update check interval set to ${interval === 'never' ? 'manual only' : interval}`);
+    };
+
+    const handleClearSkipped = () => {
+        clearSkippedVersions();
+        toast.success('Skipped versions cleared');
     };
 
     const handleSave = async () => {
@@ -106,6 +161,15 @@ export default function Settings() {
                         }`}
                 >
                     🌐 Network & Guides
+                </button>
+                <button
+                    onClick={() => setActiveTab('updates')}
+                    className={`px-6 py-3 rounded-t-xl font-medium transition-colors ${activeTab === 'updates'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-b-2 border-emerald-400'
+                        : 'text-slate-400 hover:text-white'
+                        }`}
+                >
+                    🔄 Updates
                 </button>
             </div>
 
@@ -271,7 +335,7 @@ export default function Settings() {
                         </div>
                     </div>
                 </div>
-            ) : (
+            ) : activeTab === 'network' ? (
                 <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
                     {/* Quick Install Guide */}
                     <div className="glass-panel rounded-2xl p-6">
@@ -409,7 +473,155 @@ export default function Settings() {
                         </div>
                     </div>
                 </div>
-            )}
+            ) : activeTab === 'updates' ? (
+                <div className="space-y-6 animate-in slide-in-from-left-4 duration-300">
+                    {/* Check for Updates */}
+                    <div className="glass-panel rounded-2xl p-8">
+                        <div className="flex items-start space-x-4 mb-6">
+                            <div className="p-3 bg-emerald-500/10 rounded-xl">
+                                <RefreshCw className="w-8 h-8 text-emerald-400" />
+                            </div>
+                            <div className="flex-1">
+                                <h2 className="text-2xl font-bold text-white">Check for Updates</h2>
+                                <p className="text-slate-400 mt-1">
+                                    Current version: <span className="text-emerald-400 font-mono">{getCurrentVersion()}</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-4 mb-6">
+                            <button
+                                onClick={handleCheckForUpdates}
+                                disabled={isCheckingUpdates}
+                                className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Download className={`w-5 h-5 ${isCheckingUpdates ? 'animate-spin' : ''}`} />
+                                {isCheckingUpdates ? 'Checking...' : 'Check Now'}
+                            </button>
+
+                            {updateCheckResult && (
+                                <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${updateCheckResult.includes('available')
+                                    ? 'bg-sky-500/10 text-sky-400'
+                                    : updateCheckResult.includes('latest')
+                                        ? 'bg-green-500/10 text-green-400'
+                                        : 'bg-red-500/10 text-red-400'
+                                    }`}>
+                                    {updateCheckResult.includes('available') ? (
+                                        <Download className="w-4 h-4" />
+                                    ) : updateCheckResult.includes('latest') ? (
+                                        <CheckCircle className="w-4 h-4" />
+                                    ) : (
+                                        <AlertCircle className="w-4 h-4" />
+                                    )}
+                                    {updateCheckResult}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Update Interval */}
+                        <div className="border-t border-slate-700 pt-6">
+                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                <Clock className="w-5 h-5 text-slate-400" />
+                                Automatic Check Interval
+                            </h3>
+                            <div className="flex flex-wrap gap-2">
+                                {(['never', '1h', '6h', '12h', '24h'] as const).map(interval => (
+                                    <button
+                                        key={interval}
+                                        onClick={() => handleUpdateIntervalChange(interval)}
+                                        className={`px-4 py-2 rounded-lg font-medium transition-colors ${updateSettings?.checkInterval === interval
+                                            ? 'bg-emerald-500 text-white'
+                                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                                            }`}
+                                    >
+                                        {interval === 'never' ? 'Manual Only' : `Every ${interval}`}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Update History */}
+                    <div className="glass-panel rounded-2xl p-8">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                                <span className="bg-violet-500/10 p-2 rounded-lg">
+                                    <History className="w-6 h-6 text-violet-400" />
+                                </span>
+                                Update History
+                            </h2>
+                            {updateHistory.length > 0 && (
+                                <button
+                                    onClick={handleClearSkipped}
+                                    className="text-sm text-slate-400 hover:text-white transition-colors"
+                                >
+                                    Clear Skipped Versions
+                                </button>
+                            )}
+                        </div>
+
+                        {updateHistory.length === 0 ? (
+                            <div className="text-center py-8 text-slate-500">
+                                <History className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                                <p>No update history yet</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3 max-h-64 overflow-y-auto">
+                                {updateHistory.slice(0, 10).map(entry => (
+                                    <div
+                                        key={entry.id}
+                                        className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3 border border-slate-700"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg ${entry.action === 'installed'
+                                                ? 'bg-green-500/10 text-green-400'
+                                                : entry.action === 'skipped'
+                                                    ? 'bg-yellow-500/10 text-yellow-400'
+                                                    : 'bg-red-500/10 text-red-400'
+                                                }`}>
+                                                {entry.action === 'installed' ? (
+                                                    <CheckCircle className="w-4 h-4" />
+                                                ) : entry.action === 'skipped' ? (
+                                                    <Clock className="w-4 h-4" />
+                                                ) : (
+                                                    <AlertCircle className="w-4 h-4" />
+                                                )}
+                                            </div>
+                                            <div>
+                                                <div className="font-medium text-white">v{entry.version}</div>
+                                                <div className="text-xs text-slate-500 capitalize">{entry.action}</div>
+                                            </div>
+                                        </div>
+                                        <div className="text-sm text-slate-400">
+                                            {formatRelativeTime(entry.date)}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Rollback / Previous Versions */}
+                    <div className="glass-panel rounded-2xl p-8">
+                        <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+                            <span className="bg-orange-500/10 p-2 rounded-lg">
+                                <Undo2 className="w-6 h-6 text-orange-400" />
+                            </span>
+                            Previous Versions
+                        </h2>
+                        <p className="text-slate-400 mb-4">
+                            If you need to downgrade to a previous version, you can download older releases from GitHub.
+                        </p>
+                        <button
+                            onClick={() => openUrl(getReleasesUrl())}
+                            className="flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl transition-colors shadow-lg shadow-orange-500/20"
+                        >
+                            <ExternalLink className="w-5 h-5" />
+                            View All Releases on GitHub
+                        </button>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }

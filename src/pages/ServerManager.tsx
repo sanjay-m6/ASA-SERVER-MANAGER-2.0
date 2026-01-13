@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Play, Square, RotateCw, Trash2, Download, Settings, Terminal, Globe, Shield, ChevronDown, ChevronUp, Copy } from 'lucide-react';
+import { Plus, Play, Square, RotateCw, Trash2, Download, Settings, Terminal, Globe, Shield, ChevronDown, ChevronUp, Copy, AppWindow } from 'lucide-react';
 import { useServerStore } from '../stores/serverStore';
 import { cn } from '../utils/helpers';
 import InstallServerDialog from '../components/server/InstallServerDialog';
 import ImportServerDialog from '../components/server/ImportServerDialog';
 import CloneOptionsModal from '../components/server/CloneOptionsModal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
-import { startServer, stopServer, restartServer, deleteServer, getAllServers, updateServer, startLogWatcher, cloneServer, transferSettings, extractSaveData } from '../utils/tauri';
+import { startServer, stopServer, restartServer, deleteServer, getAllServers, updateServer, startLogWatcher, cloneServer, transferSettings, extractSaveData, showServerConsole, hardcoreRetryMods } from '../utils/tauri';
 import toast from 'react-hot-toast';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { getVersion } from '@tauri-apps/api/app';
@@ -148,6 +148,31 @@ export default function ServerManager() {
         } catch (error) {
             updateServerStatus(serverId, 'stopped');
             toast.error(`Failed to update server: ${error}`);
+        }
+    };
+
+    const handleShowConsole = async (serverId: number) => {
+        try {
+            await showServerConsole(serverId);
+            toast.success('Console window request sent');
+        } catch (error) {
+            toast.error(`Failed to show console: ${error}`);
+        }
+    };
+
+    const handleHardcoreRetry = async (serverId: number) => {
+        try {
+            if (!window.confirm("Deep Repair will stop the server, delete the mod cache (.temp folder), and force a fresh download. This may take longer than a normal restart. Continue?")) {
+                return;
+            }
+            updateServerStatus(serverId, 'starting');
+            setExpandedConsoles(prev => ({ ...prev, [serverId]: true }));
+            await hardcoreRetryMods(serverId);
+            updateServerStatus(serverId, 'running');
+            toast.success('Deep repair initiated successfully');
+        } catch (error) {
+            updateServerStatus(serverId, 'stopped');
+            toast.error(`Deep repair failed: ${error}`);
         }
     };
 
@@ -311,13 +336,42 @@ export default function ServerManager() {
                                         </button>
                                     ) : null}
 
+                                    <div className="relative group/dropdown">
+                                        <button
+                                            disabled={server.status === 'stopped'}
+                                            className="p-2.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/20 rounded-lg transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                            title="Restart Options"
+                                        >
+                                            <RotateCw className="w-5 h-5" />
+                                        </button>
+
+                                        {/* Dropdown Menu */}
+                                        <div className="absolute top-full right-0 mt-2 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-xl opacity-0 invisible group-hover/dropdown:opacity-100 group-hover/dropdown:visible transition-all z-50 overflow-hidden">
+                                            <button
+                                                onClick={() => handleRestartServer(server.id)}
+                                                className="w-full text-left px-4 py-3 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors flex items-center gap-2"
+                                            >
+                                                <RotateCw className="w-4 h-4" />
+                                                <span>Normal Restart</span>
+                                            </button>
+                                            <button
+                                                onClick={() => handleHardcoreRetry(server.id)}
+                                                className="w-full text-left px-4 py-3 hover:bg-red-500/10 text-red-400 hover:text-red-300 transition-colors flex items-center gap-2 border-t border-slate-800"
+                                                title="Stops server, clears mod cache, and restarts"
+                                            >
+                                                <Shield className="w-4 h-4" />
+                                                <span>Deep Repair Mods</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
                                     <button
-                                        onClick={() => handleRestartServer(server.id)}
+                                        onClick={() => handleShowConsole(server.id)}
                                         disabled={server.status === 'stopped'}
-                                        className="p-2.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/20 rounded-lg transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                                        title="Restart Server"
+                                        className="p-2.5 bg-violet-500/10 hover:bg-violet-500/20 text-violet-400 border border-violet-500/20 rounded-lg transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                        title="Show Server Console Window"
                                     >
-                                        <RotateCw className="w-5 h-5" />
+                                        <AppWindow className="w-5 h-5" />
                                     </button>
 
                                     <div className="w-px h-8 bg-slate-700/50 mx-1"></div>

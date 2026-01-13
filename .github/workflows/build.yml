@@ -14,8 +14,6 @@ env:
 jobs:
   build:
     runs-on: windows-latest
-    # Only run on push events or PRs from the same repo (not forks) where secrets are available
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: write
     
@@ -40,26 +38,6 @@ jobs:
       - name: Install Dependencies
         run: npm ci
       
-      # Check if signing key is available
-      - name: Check signing key availability
-        id: check_signing
-        run: |
-          if ("${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" -ne "") {
-            echo "has_signing_key=true" >> $env:GITHUB_OUTPUT
-          } else {
-            echo "has_signing_key=false" >> $env:GITHUB_OUTPUT
-          }
-        shell: pwsh
-      
-      # If no signing key, disable updater artifacts temporarily
-      - name: Disable updater artifacts (no signing key)
-        if: steps.check_signing.outputs.has_signing_key != 'true'
-        run: |
-          $config = Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json
-          $config.bundle.createUpdaterArtifacts = $false
-          $config | ConvertTo-Json -Depth 10 | Set-Content src-tauri/tauri.conf.json
-        shell: pwsh
-      
       - name: Build Tauri App
         uses: tauri-apps/tauri-action@v0
         env:
@@ -67,22 +45,24 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
-          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('ASA Server Manager {0}', github.ref_name) || '' }}
+          tagName: v__VERSION__
+          releaseName: 'ASA Server Manager v__VERSION__'
           releaseBody: |
-            ## What's New
-            See the [changelog](CHANGELOG.md) for details.
+            ## What's New in v__VERSION__
+            - Enhanced Update System with Settings tab
+            - Manual "Check for Updates" button
+            - Configurable auto-check intervals
+            - Update history tracking
+            - Player engram points configuration
             
             ## Installation
             Download the `.msi` installer for Windows.
             
             ## Auto-Update
-            If you have v2.1.2+, you'll receive an in-app notification to update automatically!
-          releaseDraft: ${{ startsWith(github.ref, 'refs/tags/') }}
+            Existing users with v2.1.2+ will receive an in-app notification to update automatically!
+          releaseDraft: true
           prerelease: false
-          includeUpdaterJson: ${{ steps.check_signing.outputs.has_signing_key == 'true' }}
-
-
+          includeUpdaterJson: true
 
   lint:
     runs-on: ubuntu-latest

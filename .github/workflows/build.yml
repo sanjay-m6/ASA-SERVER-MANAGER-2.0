@@ -2,11 +2,8 @@ name: Build & Release
 
 on:
   push:
-    branches: [main]
     tags:
       - 'v*'
-  pull_request:
-    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -45,10 +42,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'ASA Server Manager v__VERSION__'
+          tagName: ${{ github.ref_name }}
+          releaseName: 'ASA Server Manager ${{ github.ref_name }}'
           releaseBody: |
-            ## What's New in v__VERSION__
+            ## What's New
             - Enhanced Update System with Settings tab
             - Manual "Check for Updates" button
             - Configurable auto-check intervals
@@ -59,29 +56,7 @@ jobs:
             Download the `.msi` installer for Windows.
             
             ## Auto-Update
-            Existing users with v2.1.2+ will receive an in-app notification to update automatically!
-          releaseDraft: true
+            Existing users will receive an in-app notification to update automatically!
+          releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
-
-  lint:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      
-      - name: Install Dependencies
-        run: npm ci
-      
-      - name: Lint TypeScript
-        run: npm run lint --if-present
-      
-      - name: Type Check
-        run: npm run typecheck --if-present

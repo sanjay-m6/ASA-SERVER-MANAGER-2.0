@@ -4,5 +4,6 @@ pub mod config;
 pub mod mods;
 pub mod player;
 pub mod rcon;
+pub mod scheduler;
 pub mod server;
 pub mod system;

@@ -152,6 +152,12 @@ pub fn run() {
             commands::backup::verify_backup,
             commands::backup::get_backup_contents,
             commands::backup::cleanup_old_backups,
+            // Scheduler commands
+            commands::scheduler::get_scheduled_tasks,
+            commands::scheduler::create_scheduled_task,
+            commands::scheduler::toggle_scheduled_task,
+            commands::scheduler::delete_scheduled_task,
+            commands::scheduler::update_task_last_run,
             // RCON commands
             commands::rcon::rcon_connect,
             commands::rcon::rcon_disconnect,

@@ -114,6 +114,21 @@ CREATE TABLE IF NOT EXISTS player_stats (
     is_banned INTEGER DEFAULT 0
 );
 
+-- Scheduled tasks table
+CREATE TABLE IF NOT EXISTS scheduled_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    server_id INTEGER NOT NULL,
+    task_type TEXT NOT NULL CHECK(task_type IN ('restart', 'backup', 'rcon-command', 'announcement', 'save-world', 'destroy-wild-dinos')),
+    cron_expression TEXT NOT NULL,
+    command TEXT,
+    message TEXT,
+    pre_warning_minutes INTEGER DEFAULT 5,
+    enabled INTEGER DEFAULT 1,
+    last_run TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
+);
+
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_mods_server_id ON mods(server_id);
 CREATE INDEX IF NOT EXISTS idx_backups_server_id ON backups(server_id);

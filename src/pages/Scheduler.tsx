@@ -11,11 +11,14 @@ import {
     MessageSquare,
     Server,
     HardDrive,
-    Zap
+    Zap,
+    Loader2
 } from 'lucide-react';
 import { cn } from '../utils/helpers';
 import toast from 'react-hot-toast';
 import { useServerStore } from '../stores/serverStore';
+import { invoke } from '@tauri-apps/api/core';
+import { getAllServers } from '../utils/tauri';
 
 interface ScheduledTask {
     id: number;
@@ -49,10 +52,11 @@ const CRON_PRESETS = [
 ];
 
 export default function Scheduler() {
-    const { servers } = useServerStore();
+    const { servers, setServers } = useServerStore();
     const [tasks, setTasks] = useState<ScheduledTask[]>([]);
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
 
     // Form state
     const [newTask, setNewTask] = useState<{
@@ -69,49 +73,86 @@ export default function Scheduler() {
         preWarningMinutes: 5,
     });
 
+    // Load servers
+    useEffect(() => {
+        getAllServers().then(setServers).catch(console.error);
+    }, [setServers]);
+
     useEffect(() => {
         if (servers.length > 0 && !selectedServerId) {
             setSelectedServerId(servers[0].id);
         }
     }, [servers, selectedServerId]);
 
-    // Load tasks (TODO: Implement persistence)
-    useEffect(() => {
-        setTasks([]);
-    }, []);
-
-    const toggleTask = (taskId: number) => {
-        setTasks(prev => prev.map(t =>
-            t.id === taskId ? { ...t, enabled: !t.enabled } : t
-        ));
-        toast.success('Task updated');
-    };
-
-    const deleteTask = (taskId: number) => {
-        setTasks(prev => prev.filter(t => t.id !== taskId));
-        toast.success('Task deleted');
-    };
-
-    const addTask = () => {
+    // Fetch tasks from backend
+    const fetchTasks = async () => {
         if (!selectedServerId) return;
 
-        const task: ScheduledTask = {
-            id: Date.now(),
-            serverId: selectedServerId,
-            ...newTask,
-            enabled: true,
-        };
+        setIsLoading(true);
+        try {
+            const data = await invoke<ScheduledTask[]>('get_scheduled_tasks', { serverId: selectedServerId });
+            setTasks(data);
+        } catch (error) {
+            console.error('Failed to fetch tasks:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-        setTasks(prev => [...prev, task]);
-        setShowAddModal(false);
-        setNewTask({
-            taskType: 'restart',
-            cronExpression: '0 */6 * * *',
-            command: '',
-            message: '',
-            preWarningMinutes: 5,
-        });
-        toast.success('Scheduled task created');
+    useEffect(() => {
+        fetchTasks();
+    }, [selectedServerId]);
+
+    const toggleTask = async (taskId: number, currentEnabled: boolean) => {
+        try {
+            await invoke('toggle_scheduled_task', { taskId, enabled: !currentEnabled });
+            setTasks(prev => prev.map(t =>
+                t.id === taskId ? { ...t, enabled: !t.enabled } : t
+            ));
+            toast.success('Task updated');
+        } catch (error) {
+            toast.error(`Failed to update task: ${error}`);
+        }
+    };
+
+    const deleteTask = async (taskId: number) => {
+        try {
+            await invoke('delete_scheduled_task', { taskId });
+            setTasks(prev => prev.filter(t => t.id !== taskId));
+            toast.success('Task deleted');
+        } catch (error) {
+            toast.error(`Failed to delete task: ${error}`);
+        }
+    };
+
+    const addTask = async () => {
+        if (!selectedServerId) return;
+
+        try {
+            const task = await invoke<ScheduledTask>('create_scheduled_task', {
+                request: {
+                    serverId: selectedServerId,
+                    taskType: newTask.taskType,
+                    cronExpression: newTask.cronExpression,
+                    command: newTask.command || null,
+                    message: newTask.message || null,
+                    preWarningMinutes: newTask.preWarningMinutes,
+                }
+            });
+
+            setTasks(prev => [task, ...prev]);
+            setShowAddModal(false);
+            setNewTask({
+                taskType: 'restart',
+                cronExpression: '0 */6 * * *',
+                command: '',
+                message: '',
+                preWarningMinutes: 5,
+            });
+            toast.success('Scheduled task created');
+        } catch (error) {
+            toast.error(`Failed to create task: ${error}`);
+        }
     };
 
     const getTaskTypeInfo = (type: string) => {
@@ -195,7 +236,7 @@ export default function Scheduler() {
                                 </div>
 
                                 <button
-                                    onClick={() => toggleTask(task.id)}
+                                    onClick={() => toggleTask(task.id, task.enabled)}
                                     className={cn(
                                         "p-2 rounded-lg transition-colors",
                                         task.enabled

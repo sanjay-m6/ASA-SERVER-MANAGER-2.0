@@ -61,7 +61,142 @@ pub async fn save_config(
 
     let file_path = dir_path.join(format!("{}.ini", config_type));
 
-    fs::write(file_path, content).map_err(|e| e.to_string())
+    fs::write(file_path, &content).map_err(|e| e.to_string())?;
+
+    // If we're saving GameUserSettings.ini, we need to sync critical values to the database
+    // because the start_server command reads from the DB, not the INI files
+    if config_type == "GameUserSettings" {
+        let mut session_name: Option<String> = None;
+        let mut map_name: Option<String> = None;
+        let mut max_players: Option<i32> = None;
+        let mut server_password: Option<String> = None;
+        let mut admin_password: Option<String> = None;
+        let mut rcon_enabled: Option<bool> = None;
+        let mut rcon_port: Option<u16> = None;
+        let mut game_port: Option<u16> = None;
+        let mut query_port: Option<u16> = None;
+
+        let mut current_section = String::new();
+
+        for line in content.lines() {
+            let line = line.trim();
+
+            // Section header
+            if line.starts_with('[') && line.ends_with(']') {
+                current_section = line[1..line.len() - 1].to_string();
+                continue;
+            }
+
+            // Key=Value pair
+            if let Some((key, value)) = line.split_once('=') {
+                let key = key.trim();
+                let raw_value = value.trim();
+
+                // Remove surrounding quotes if present
+                let value = if raw_value.starts_with('"')
+                    && raw_value.ends_with('"')
+                    && raw_value.len() >= 2
+                {
+                    &raw_value[1..raw_value.len() - 1]
+                } else {
+                    raw_value
+                };
+
+                if current_section == "ServerSettings"
+                    || current_section == "/Script/ShooterGame.ShooterGameMode"
+                {
+                    match key {
+                        "SessionName" | "ServerName" => session_name = Some(value.to_string()),
+                        "MapName" => map_name = Some(value.to_string()),
+                        "MaxPlayers" => max_players = value.parse().ok(),
+                        "ServerPassword" => server_password = Some(value.to_string()),
+                        "ServerAdminPassword" => admin_password = Some(value.to_string()),
+                        "RCONEnabled" => rcon_enabled = Some(value.to_uppercase() == "TRUE"),
+                        "RCONPort" => rcon_port = value.parse().ok(),
+                        _ => {}
+                    }
+                }
+
+                if current_section == "URL" || current_section == "/Script/Engine.GameSession" {
+                    match key {
+                        "Port" => game_port = value.parse().ok(),
+                        "QueryPort" => query_port = value.parse().ok(),
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        // Perform the update
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db.get_connection().map_err(|e| e.to_string())?;
+
+        let mut query = "UPDATE servers SET ".to_string();
+        let mut updates = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        if let Some(v) = session_name {
+            updates.push("session_name = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = map_name {
+            updates.push("map_name = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = max_players {
+            updates.push("max_players = ?");
+            params.push(Box::new(v));
+        }
+        // Handle password specially - empty string means remove it (set to null in DB context usually, but here we might wrap)
+        // But for strings we usually just overwrite.
+        if let Some(v) = server_password {
+            updates.push("server_password = ?");
+            if v.is_empty() {
+                params.push(Box::new(None::<String>));
+            } else {
+                params.push(Box::new(Some(v)));
+            }
+        }
+        if let Some(v) = admin_password {
+            updates.push("admin_password = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = rcon_enabled {
+            updates.push("rcon_enabled = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = rcon_port {
+            updates.push("rcon_port = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = game_port {
+            updates.push("game_port = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = query_port {
+            updates.push("query_port = ?");
+            params.push(Box::new(v));
+        }
+
+        if !updates.is_empty() {
+            query.push_str(&updates.join(", "));
+            query.push_str(" WHERE id = ?");
+            params.push(Box::new(server_id));
+
+            let params_refs: Vec<&dyn rusqlite::ToSql> =
+                params.iter().map(|p| p.as_ref()).collect();
+
+            conn.execute(&query, params_refs.as_slice())
+                .map_err(|e| format!("Failed to update database: {}", e))?;
+
+            println!(
+                "✅ Synced settings from INI to Database for server {}",
+                server_id
+            );
+        }
+    }
+
+    Ok(())
 }
 
 #[tauri::command]

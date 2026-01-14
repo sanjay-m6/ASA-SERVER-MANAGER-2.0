@@ -2,7 +2,7 @@
 
 export type ServerType = 'ASA';
 
-export type ServerStatus = 'stopped' | 'starting' | 'running' | 'crashed' | 'updating';
+export type ServerStatus = 'stopped' | 'starting' | 'running' | 'crashed' | 'updating' | 'restarting';
 
 export interface Server {
     id: number;
@@ -77,6 +77,7 @@ export interface Backup {
     includesMods: boolean;
     includesSaves: boolean;
     includesCluster: boolean;
+    verified?: boolean;
 }
 
 export interface Cluster {

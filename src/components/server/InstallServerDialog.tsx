@@ -798,45 +798,42 @@ export default function InstallServerDialog({ onClose }: Props) {
                     </div>
                 </div>
 
-                {/* Footer Navigation */}
-                <div className="px-8 py-6 border-t border-slate-700/50 flex items-center justify-between">
-                    {!isInstalling || progress?.isComplete || progress?.isError ? (
-                        <>
-                            <button
-                                onClick={prevStep}
-                                className="flex items-center gap-2 px-5 py-2.5 text-slate-400 hover:text-white transition-colors"
-                            >
-                                <ArrowLeft className="w-4 h-4" />
-                                {step === 1 ? 'Cancel' : 'Back'}
-                            </button>
+                {/* Footer Buttons - Fixed at bottom */}
+                <div className="p-4 sm:p-6 bg-slate-900 border-t border-slate-700/50 flex justify-between items-center relative z-20">
+                    <button
+                        onClick={prevStep}
+                        className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white transition-all font-medium text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={isInstalling}
+                    >
+                        <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                        {step === 1 ? 'Cancel' : 'Back'}
+                    </button>
 
-                            {progress?.isComplete ? (
-                                <button
-                                    onClick={onClose}
-                                    className="flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-medium transition-colors"
-                                >
-                                    <CheckCircle className="w-5 h-5" />
-                                    Done
-                                </button>
-                            ) : progress?.isError ? (
-                                <button
-                                    onClick={() => { setStep(1); setIsInstalling(false); setProgress(null); }}
-                                    className="flex items-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium transition-colors"
-                                >
-                                    Try Again
-                                </button>
-                            ) : (
-                                <button
-                                    onClick={nextStep}
-                                    disabled={!canProceed()}
-                                    className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-slate-100 text-slate-900 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {step === 4 ? 'Install Server' : 'Continue'}
-                                    <ArrowRight className="w-4 h-4" />
-                                </button>
-                            )}
-                        </>
-                    ) : null}
+                    <button
+                        onClick={nextStep}
+                        disabled={!canProceed() || isInstalling}
+                        className={`flex items-center gap-2 px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-bold text-sm sm:text-base transition-all shadow-lg ${!canProceed() || isInstalling
+                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                            : 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/20 hover:scale-105'
+                            }`}
+                    >
+                        {isInstalling ? (
+                            <>
+                                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                                Installing...
+                            </>
+                        ) : step === 4 ? (
+                            <>
+                                <Download className="w-4 h-4 sm:w-5 sm:h-5" />
+                                Install Server
+                            </>
+                        ) : (
+                            <>
+                                Next
+                                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </>
+                        )}
+                    </button>
                 </div>
             </div>
         </div>

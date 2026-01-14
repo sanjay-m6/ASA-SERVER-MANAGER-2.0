@@ -61,11 +61,13 @@ export default function Sidebar() {
             />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 font-display">ASA Manager</h1>
+            <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 font-display">ARK Manager</h1>
             <p className="text-xs text-slate-400 font-medium tracking-wide">COMMAND CENTER 2.1</p>
           </div>
         </div>
       </div>
+
+
 
       {/* Navigation */}
       <nav className="flex-1 px-4 py-4 space-y-1.5 overflow-y-auto scrollbar-hide">
@@ -120,7 +122,7 @@ export default function Sidebar() {
             )}></div>
           </div>
           <div className="mt-3 text-[10px] text-slate-500 text-center font-mono">
-            v{appVersion} • ASA Exclusive
+            v{appVersion} • 🐲 ASA Manager
           </div>
         </div>
       </div>

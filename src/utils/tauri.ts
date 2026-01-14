@@ -72,6 +72,10 @@ export async function startServer(serverId: number): Promise<void> {
     return await invoke('start_server', { serverId });
 }
 
+export async function startServerNoMods(serverId: number): Promise<void> {
+    return await invoke('start_server_no_mods', { serverId });
+}
+
 export async function stopServer(serverId: number): Promise<void> {
     return await invoke('stop_server', { serverId });
 }

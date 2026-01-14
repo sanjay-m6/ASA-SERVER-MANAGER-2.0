@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-// ASA Server Manager 2.0 - ASA Only Models
+// ARK Server Manager 2.0 - ASA and ASE Models
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -32,6 +32,7 @@ impl ToString for ServerStatus {
 pub struct Server {
     pub id: i64,
     pub name: String,
+
     pub install_path: PathBuf,
     pub status: ServerStatus,
     pub ports: ServerPorts,

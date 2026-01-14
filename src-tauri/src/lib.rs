@@ -94,6 +94,7 @@ pub fn run() {
             commands::server::get_server_by_id,
             commands::server::install_server,
             commands::server::start_server,
+            commands::server::start_server_no_mods,
             commands::server::stop_server,
             commands::server::restart_server,
             commands::server::delete_server,

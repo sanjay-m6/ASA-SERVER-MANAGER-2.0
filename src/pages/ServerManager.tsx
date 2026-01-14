@@ -6,7 +6,7 @@ import InstallServerDialog from '../components/server/InstallServerDialog';
 import ImportServerDialog from '../components/server/ImportServerDialog';
 import CloneOptionsModal from '../components/server/CloneOptionsModal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
-import { startServer, stopServer, restartServer, deleteServer, getAllServers, updateServer, startLogWatcher, cloneServer, transferSettings, extractSaveData, showServerConsole, hardcoreRetryMods } from '../utils/tauri';
+import { startServer, stopServer, restartServer, deleteServer, getAllServers, updateServer, startLogWatcher, cloneServer, transferSettings, extractSaveData, showServerConsole, hardcoreRetryMods, startServerNoMods } from '../utils/tauri';
 import toast from 'react-hot-toast';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { getVersion } from '@tauri-apps/api/app';
@@ -98,6 +98,20 @@ export default function ServerManager() {
             await startServer(serverId);
             updateServerStatus(serverId, 'running');
             toast.success('Server started successfully');
+        } catch (error) {
+            updateServerStatus(serverId, 'stopped');
+            toast.error(`Failed to start server: ${error}`);
+        }
+    };
+
+    const handleStartServerNoMods = async (serverId: number) => {
+        try {
+            updateServerStatus(serverId, 'starting');
+            setExpandedConsoles(prev => ({ ...prev, [serverId]: true }));
+            setServerLogs(prev => ({ ...prev, [serverId]: [] }));
+            await startServerNoMods(serverId);
+            updateServerStatus(serverId, 'running');
+            toast.success('Server started (without mods)');
         } catch (error) {
             updateServerStatus(serverId, 'stopped');
             toast.error(`Failed to start server: ${error}`);
@@ -319,13 +333,33 @@ export default function ServerManager() {
                                 {/* Actions */}
                                 <div className="flex items-center gap-3">
                                     {server.status === 'stopped' || server.status === 'crashed' ? (
-                                        <button
-                                            onClick={() => handleStartServer(server.id)}
-                                            className="p-2.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 rounded-lg transition-all hover:scale-105 active:scale-95"
-                                            title="Start Server"
-                                        >
-                                            <Play className="w-5 h-5 fill-current" />
-                                        </button>
+                                        <div className="relative group/start">
+                                            <button
+                                                onClick={() => handleStartServer(server.id)}
+                                                className="p-2.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 rounded-lg transition-all hover:scale-105 active:scale-95"
+                                                title="Start Server"
+                                            >
+                                                <Play className="w-5 h-5 fill-current" />
+                                            </button>
+                                            {/* Start Options Dropdown */}
+                                            <div className="absolute top-full left-0 mt-2 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-xl opacity-0 invisible group-hover/start:opacity-100 group-hover/start:visible transition-all z-50 overflow-hidden">
+                                                <button
+                                                    onClick={() => handleStartServer(server.id)}
+                                                    className="w-full text-left px-4 py-3 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors flex items-center gap-2"
+                                                >
+                                                    <Play className="w-4 h-4" />
+                                                    <span>Start</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => handleStartServerNoMods(server.id)}
+                                                    className="w-full text-left px-4 py-3 hover:bg-yellow-500/10 text-yellow-400 hover:text-yellow-300 transition-colors flex items-center gap-2 border-t border-slate-800"
+                                                    title="Start without any mods for troubleshooting"
+                                                >
+                                                    <Shield className="w-4 h-4" />
+                                                    <span>Start (No Mods)</span>
+                                                </button>
+                                            </div>
+                                        </div>
                                     ) : server.status === 'running' ? (
                                         <button
                                             onClick={() => handleStopServer(server.id)}

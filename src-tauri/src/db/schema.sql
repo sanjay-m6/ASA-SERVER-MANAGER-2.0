@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS servers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    server_type TEXT NOT NULL CHECK(server_type IN ('ASA')),
+    server_type TEXT NOT NULL DEFAULT 'ASA' CHECK(server_type IN ('ASA')),
     install_path TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'stopped' CHECK(status IN ('stopped', 'starting', 'running', 'crashed', 'updating', 'restarting')),
     game_port INTEGER NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS mods (
     author TEXT,
     description TEXT,
     workshop_url TEXT,
-    server_type TEXT NOT NULL CHECK(server_type IN ('ASA')),
+    server_type TEXT NOT NULL DEFAULT 'ASA' CHECK(server_type IN ('ASA')),
     enabled BOOLEAN DEFAULT 1,
     load_order INTEGER NOT NULL,
     installed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

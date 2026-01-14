@@ -88,12 +88,12 @@ pub async fn get_server_by_id(
 }
 
 #[tauri::command]
-pub async fn show_server_console(
-    state: State<'_, AppState>,
-    server_id: i64,
-) -> Result<(), String> {
+pub async fn show_server_console(state: State<'_, AppState>, server_id: i64) -> Result<(), String> {
     println!("🖥️ Showing console for server {}", server_id);
-    state.process_manager.show_server_window(server_id).map_err(|e| e.to_string())
+    state
+        .process_manager
+        .show_server_window(server_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -163,6 +163,7 @@ pub async fn install_server(
     Ok(Server {
         id,
         name: unique_name.clone(),
+
         install_path: PathBuf::from(install_path),
         status: ServerStatus::Stopped,
         ports: ServerPorts {
@@ -281,8 +282,8 @@ pub async fn clone_server(
 
         conn.execute(
             "INSERT INTO servers (name, install_path, status, game_port, query_port, rcon_port,
-             max_players, admin_password, map_name, session_name, server_type, server_password, ip_address)
-             VALUES (?1, ?2, 'stopped', ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'ASA', ?10, ?11)",
+             max_players, admin_password, map_name, session_name, server_password, ip_address)
+             VALUES (?1, ?2, 'stopped', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             rusqlite::params![
                 new_name,
                 new_install_path.to_string_lossy(),
@@ -310,6 +311,7 @@ pub async fn clone_server(
     Ok(Server {
         id: new_id,
         name: new_name.clone(),
+
         install_path: new_install_path,
         status: ServerStatus::Stopped,
         ports: ServerPorts {
@@ -545,15 +547,19 @@ pub async fn start_server(
         mods
     };
 
+    let install_path_buf = PathBuf::from(&install_path);
+
+    // Pass all enabled mods to the server - ARK/CFCore will download any missing mods automatically
     if !enabled_mods.is_empty() {
         println!(
-            "  🧩 Found {} enabled mods for server {}",
+            "  🧩 Passing {} mods to server {} (ARK will download any missing mods)",
             enabled_mods.len(),
             server_id
         );
+        for mod_id in &enabled_mods {
+            println!("     - Mod: {}", mod_id);
+        }
     }
-
-    let install_path_buf = PathBuf::from(&install_path);
 
     // Check if server executable exists
     let executable = install_path_buf
@@ -584,7 +590,7 @@ pub async fn start_server(
         println!("  ✅ Server download complete, now starting...");
     }
 
-    // Start the server process with mods
+    // Start the server process with all enabled mods (ARK will download missing ones)
     let mods_option = if enabled_mods.is_empty() {
         None
     } else {
@@ -624,6 +630,114 @@ pub async fn start_server(
     }
 
     println!("  ✅ Server {} started", server_id);
+    Ok(())
+}
+
+/// Start server explicitly without any mods (for troubleshooting)
+#[tauri::command]
+pub async fn start_server_no_mods(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    server_id: i64,
+) -> Result<(), String> {
+    println!("▶️ Starting server {} (NO MODS MODE)", server_id);
+
+    // Get server details
+    let (
+        install_path,
+        map_name,
+        session_name,
+        game_port,
+        query_port,
+        rcon_port,
+        max_players,
+        server_password,
+        admin_password,
+        ip_address,
+        cluster_name,
+        cluster_path,
+    ) = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db.get_connection().map_err(|e| e.to_string())?;
+
+        conn.query_row(
+            "SELECT s.install_path, s.map_name, s.session_name, s.game_port, s.query_port, s.rcon_port, 
+             s.max_players, s.server_password, s.admin_password, s.ip_address,
+             c.name, c.cluster_path
+             FROM servers s
+             LEFT JOIN clusters c ON s.cluster_id = c.id
+             WHERE s.id = ?1",
+            [server_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, u16>(3)?,
+                    row.get::<_, u16>(4)?,
+                    row.get::<_, u16>(5)?,
+                    row.get::<_, i32>(6)?,
+                    row.get::<_, Option<String>>(7)?,
+                    row.get::<_, String>(8)?,
+                    row.get::<_, Option<String>>(9)?,
+                    row.get::<_, Option<String>>(10)?,
+                    row.get::<_, Option<String>>(11)?,
+                ))
+            },
+        )
+        .map_err(|e| format!("Server not found: {}", e))?
+    };
+
+    let install_path_buf = PathBuf::from(&install_path);
+
+    // Check if server executable exists
+    let executable = install_path_buf
+        .join("ShooterGame")
+        .join("Binaries")
+        .join("Win64")
+        .join("ArkAscendedServer.exe");
+
+    if !executable.exists() {
+        println!("  📥 Server executable not found, starting automatic download...");
+        let installer = ServerInstaller::new(app_handle.clone());
+        installer.install_asa_server(&install_path_buf).await?;
+        println!("  ✅ Server download complete, now starting...");
+    }
+
+    // Start server WITHOUT mods
+    state
+        .process_manager
+        .start_server(
+            server_id,
+            "ASA",
+            &install_path_buf,
+            &map_name,
+            &session_name,
+            game_port,
+            query_port,
+            rcon_port,
+            max_players,
+            server_password.as_deref(),
+            &admin_password,
+            ip_address.as_deref(),
+            cluster_name.as_deref(),
+            cluster_path.as_deref(),
+            None, // No mods
+        )
+        .map_err(|e| e.to_string())?;
+
+    // Update status in database
+    {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db.get_connection().map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE servers SET status = 'running', last_started = datetime('now') WHERE id = ?1",
+            [server_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    println!("  ✅ Server {} started (NO MODS)", server_id);
     Ok(())
 }
 
@@ -1191,8 +1305,8 @@ pub async fn import_server(
 
     conn.execute(
         "INSERT INTO servers (name, install_path, status, game_port, query_port, rcon_port, 
-         max_players, admin_password, server_password, map_name, session_name, rcon_enabled, server_type) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+         max_players, admin_password, server_password, map_name, session_name, rcon_enabled) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         rusqlite::params![
             &unique_name,
             &install_path,
@@ -1206,7 +1320,6 @@ pub async fn import_server(
             &map_name,
             &session_name,
             rcon_enabled,
-            "ASA",
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -1218,6 +1331,7 @@ pub async fn import_server(
     Ok(Server {
         id,
         name: unique_name.clone(),
+
         install_path: PathBuf::from(install_path),
         status: ServerStatus::Stopped,
         ports: ServerPorts {

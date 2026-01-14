@@ -130,20 +130,20 @@ impl ProcessManager {
             .join("ShooterGame.log");
 
         // Build launch arguments
-        let mut args = vec![
-            map_name.to_string(),
-            format!("listen"),
-            format!("?SessionName={}", session_name),
-            format!("?Port={}", game_port),
-            format!("?QueryPort={}", query_port),
-            format!("?RCONPort={}", rcon_port),
-            format!("?MaxPlayers={}", max_players),
-            format!("?ServerAdminPassword={}", admin_password),
-        ];
+        // Build launch arguments (Connection URL must be a single string)
+        let mut connection_url = format!("{}?listen", map_name);
+        connection_url.push_str(&format!("?SessionName={}", session_name));
+        connection_url.push_str(&format!("?Port={}", game_port));
+        connection_url.push_str(&format!("?QueryPort={}", query_port));
+        connection_url.push_str(&format!("?RCONPort={}", rcon_port));
+        connection_url.push_str(&format!("?MaxPlayers={}", max_players));
+        connection_url.push_str(&format!("?ServerAdminPassword={}", admin_password));
 
         if let Some(password) = server_password {
-            args.push(format!("?ServerPassword={}", password));
+            connection_url.push_str(&format!("?ServerPassword={}", password));
         }
+
+        let mut args = vec![connection_url];
 
         args.push("-log".to_string());
         args.push("-NoBattlEye".to_string());
@@ -196,6 +196,8 @@ impl ProcessManager {
 
         let child = command.spawn().context("Failed to start server process")?;
         let child_pid = child.id();
+
+        println!("  ✅ Server {} started with PID: {} ", server_id, child_pid);
 
         // Create stop flag for log watcher
         let stop_flag = Arc::new(AtomicBool::new(false));
@@ -319,13 +321,17 @@ impl ProcessManager {
 
         if let Some(server_proc) = processes.get_mut(&server_id) {
             match server_proc.child.try_wait() {
-                Ok(Some(_)) => {
+                Ok(Some(status)) => {
+                    println!("  ⚠️ Server {} exited with status: {:?}", server_id, status);
                     server_proc.stop_flag.store(true, Ordering::SeqCst);
                     processes.remove(&server_id);
                     false
                 }
                 Ok(None) => true,
-                Err(_) => false,
+                Err(e) => {
+                    println!("  ❌ Server {} error checking status: {:?}", server_id, e);
+                    false
+                }
             }
         } else {
             false

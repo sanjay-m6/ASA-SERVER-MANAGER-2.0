@@ -11,8 +11,7 @@ import {
     MessageSquare,
     Server,
     HardDrive,
-    Zap,
-    Loader2
+    Zap
 } from 'lucide-react';
 import { cn } from '../utils/helpers';
 import toast from 'react-hot-toast';
@@ -56,7 +55,7 @@ export default function Scheduler() {
     const [tasks, setTasks] = useState<ScheduledTask[]>([]);
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
+    const [_isLoading, setIsLoading] = useState(true);
 
     // Form state
     const [newTask, setNewTask] = useState<{

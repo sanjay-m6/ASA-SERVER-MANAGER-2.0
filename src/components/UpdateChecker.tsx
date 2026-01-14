@@ -73,7 +73,7 @@ export async function manualCheckForUpdates(): Promise<UpdateCheckResult> {
 // Get current app version
 export function getCurrentVersion(): string {
     // This will be set by Tauri
-    return (window as any).__TAURI_INTERNALS__?.metadata?.appVersion || '2.1.2';
+    return (window as any).__TAURI_INTERNALS__?.metadata?.appVersion || '2.1.4';
 }
 
 export default function UpdateChecker() {

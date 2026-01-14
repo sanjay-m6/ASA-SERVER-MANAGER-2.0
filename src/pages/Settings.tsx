@@ -90,7 +90,8 @@ export default function Settings() {
 
     const handleUpdateIntervalChange = (interval: UpdateSettings['checkInterval']) => {
         setUpdateSettings({ checkInterval: interval });
-        setUpdateSettingsState(getUpdateSettings());
+        // Update local state directly for immediate UI feedback
+        setUpdateSettingsState(prev => prev ? { ...prev, checkInterval: interval } : getUpdateSettings());
         toast.success(`Update check interval set to ${interval === 'never' ? 'manual only' : interval}`);
     };
 

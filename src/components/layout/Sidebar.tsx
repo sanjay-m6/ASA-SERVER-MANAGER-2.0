@@ -11,7 +11,7 @@ import {
   ScrollText,
   Terminal,
   Clock,
-  SlidersHorizontal,
+  MessageSquare,
   Settings as SettingsIcon
 } from 'lucide-react';
 import { cn } from '../../utils/helpers';
@@ -20,7 +20,6 @@ import { useServerStore } from '../../stores/serverStore';
 const navigation = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'Server Manager', path: '/servers', icon: Server },
-  { name: 'Visual Settings', path: '/visual-settings', icon: SlidersHorizontal },
   { name: 'RCON Console', path: '/rcon', icon: Terminal },
   { name: 'Scheduler', path: '/scheduler', icon: Clock },
   { name: 'Mod Manager', path: '/mods', icon: Puzzle },
@@ -28,6 +27,7 @@ const navigation = [
   { name: 'Cluster Manager', path: '/clusters', icon: Network },
   { name: 'Backups & Rollbacks', path: '/backups', icon: Database },
   { name: 'Logs Console', path: '/logs', icon: ScrollText },
+  { name: 'Discord Bot', path: '/discord', icon: MessageSquare },
   { name: 'Settings', path: '/settings', icon: SettingsIcon },
 ];
 

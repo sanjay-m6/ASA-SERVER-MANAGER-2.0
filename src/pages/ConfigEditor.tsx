@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useMemo } from 'react';
-import { Save, Loader2, Search, Sliders, ExternalLink, FileText, Copy, Check, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Save, Loader2, Search, Sliders, ExternalLink, FileText, Copy, Check, RotateCcw, AlertTriangle, GraduationCap, BarChart3 } from 'lucide-react';
 import { cn } from '../utils/helpers';
 import { readConfig, saveConfig } from '../utils/tauri';
 import toast from 'react-hot-toast';
@@ -13,6 +13,7 @@ import { PresetSelector } from '../components/config/PresetSelector';
 import { ConfigTooltip } from '../components/config/ConfigTooltip';
 import { ArrayEditor } from '../components/config/ArrayEditor';
 import { applyPreset, ConfigPreset } from '../data/presets';
+import StatMultiplierEditor from '../components/config/StatMultiplierEditor';
 // Field Render Component
 const ConfigInput = ({
     field,
@@ -192,7 +193,9 @@ export default function ConfigEditor() {
     const [isLoading, setIsLoading] = useState(false);
     const [activeCategory, setActiveCategory] = useState<string>('server');
     const [searchQuery, setSearchQuery] = useState('');
-    const [viewMode, setViewMode] = useState<'visual' | 'gus' | 'game'>('visual');
+    const [viewMode, setViewMode] = useState<'visual' | 'gus' | 'game' | 'levels' | 'stats'>('visual');
+    const [customDinoLevel, setCustomDinoLevel] = useState(150);
+    const [customPlayerLevel, setCustomPlayerLevel] = useState(105);
     const [copied, setCopied] = useState(false);
     const [sidebarWidth, setSidebarWidth] = useState(256);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -410,6 +413,32 @@ export default function ConfigEditor() {
         checkModifications(newConfigs);
     };
 
+    // Custom Level Generator Functions
+    const applyDinoLevel = (level: number) => {
+        setCustomDinoLevel(level);
+        const difficulty = (level / 30).toFixed(1);
+        handleUpdate('GameUserSettings', 'ServerSettings', 'OverrideOfficialDifficulty', difficulty);
+        handleUpdate('GameUserSettings', 'ServerSettings', 'DifficultyOffset', '1.0');
+        toast.success(`Max wild dino level set to ${level}`);
+    };
+
+    const applyPlayerLevel = (maxLevel: number) => {
+        setCustomPlayerLevel(maxLevel);
+
+        // Generate XP ramp
+        const levels = [];
+        for (let i = 0; i < maxLevel; i++) {
+            const xp = Math.floor(10 * Math.pow(i, 2.2));
+            levels.push(`ExperiencePointsForLevel[${i}]=${xp}`);
+        }
+
+        const rampString = `(${levels.join(',')})`;
+
+        handleUpdate('Game', '/Script/ShooterGame.ShooterGameMode', 'LevelExperienceRampOverrides', rampString);
+        handleUpdate('Game', '/Script/ShooterGame.ShooterGameMode', 'OverrideMaxExperiencePointsPlayer', Math.floor(10 * Math.pow(maxLevel, 2.2)).toString());
+        toast.success(`Max player level set to ${maxLevel}`);
+    };
+
     const conflicts = useMemo(() => {
         const issues: { type: 'warning' | 'error', message: string }[] = [];
 
@@ -552,6 +581,24 @@ export default function ConfigEditor() {
                     >
                         <FileText className="w-4 h-4" /> Game.ini
                     </button>
+                    <button
+                        onClick={() => setViewMode('levels')}
+                        className={cn(
+                            "px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2",
+                            viewMode === 'levels' ? "bg-emerald-500/10 text-emerald-400" : "text-slate-400 hover:bg-white/5"
+                        )}
+                    >
+                        <GraduationCap className="w-4 h-4" /> Levels Generator
+                    </button>
+                    <button
+                        onClick={() => setViewMode('stats')}
+                        className={cn(
+                            "px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2",
+                            viewMode === 'stats' ? "bg-indigo-500/10 text-indigo-400" : "text-slate-400 hover:bg-white/5"
+                        )}
+                    >
+                        <BarChart3 className="w-4 h-4" /> Per-Stat Multipliers
+                    </button>
                 </div>
             </div>
 
@@ -679,6 +726,84 @@ export default function ConfigEditor() {
                             )}
                         </div>
                     </>
+                ) : viewMode === 'levels' ? (
+                    <div className="flex-1 overflow-y-auto p-6">
+                        <div className="max-w-2xl mx-auto space-y-8">
+                            <div className="bg-slate-800/30 rounded-xl p-6 border border-slate-700/50">
+                                <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                                    <GraduationCap className="w-6 h-6 text-emerald-400" />
+                                    Custom Levels Generator
+                                </h2>
+                                <p className="text-slate-400 mb-6">Easily generate complex difficulty and XP configurations.</p>
+
+                                <div className="grid gap-8 md:grid-cols-2">
+                                    {/* Dino Levels */}
+                                    <div className="space-y-4">
+                                        <label className="block text-sm font-medium text-slate-300">Max Wild Dino Level</label>
+                                        <div className="flex gap-4">
+                                            <input
+                                                type="number"
+                                                value={customDinoLevel}
+                                                onChange={(e) => setCustomDinoLevel(parseInt(e.target.value) || 30)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-1 focus:ring-cyan-500 outline-none"
+                                                min="30" max="3000" step="30"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={() => applyDinoLevel(customDinoLevel)}
+                                            className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium transition-colors"
+                                        >
+                                            Apply Dino Level
+                                        </button>
+                                        <p className="text-xs text-slate-500">
+                                            Sets Difficulty Offset to 1.0 and Override Official Difficulty to {(customDinoLevel / 30).toFixed(1)}.
+                                        </p>
+                                    </div>
+
+                                    {/* Player Levels */}
+                                    <div className="space-y-4">
+                                        <label className="block text-sm font-medium text-slate-300">Max Player Level</label>
+                                        <div className="flex gap-4">
+                                            <input
+                                                type="number"
+                                                value={customPlayerLevel}
+                                                onChange={(e) => setCustomPlayerLevel(parseInt(e.target.value) || 105)}
+                                                className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-1 focus:ring-cyan-500 outline-none"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={() => applyPlayerLevel(customPlayerLevel)}
+                                            className="w-full px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-medium transition-colors"
+                                        >
+                                            Generate XP Ramp
+                                        </button>
+                                        <p className="text-xs text-slate-500">
+                                            Generates a standard exponential XP ramp for {customPlayerLevel} levels.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Info Section */}
+                            <div className="bg-slate-800/20 rounded-lg p-4 border border-slate-700/30">
+                                <h3 className="text-sm font-medium text-slate-300 mb-2">💡 How it works</h3>
+                                <ul className="text-xs text-slate-500 space-y-1">
+                                    <li>• <strong>Dino Level</strong>: Sets OverrideOfficialDifficulty based on max level / 30</li>
+                                    <li>• <strong>Player Level</strong>: Generates LevelExperienceRampOverrides with exponential XP curve</li>
+                                    <li>• Changes are applied to the config and will be saved when you click Save</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                ) : viewMode === 'stats' ? (
+                    <div className="flex-1 overflow-y-auto p-6">
+                        <div className="max-w-4xl mx-auto">
+                            <StatMultiplierEditor
+                                getValue={getValue}
+                                setValue={(source, section, key, value) => handleUpdate(source, section, key, value)}
+                            />
+                        </div>
+                    </div>
                 ) : (
                     <div className="flex-1 overflow-hidden relative p-4 bg-[#0f0f0f]">
                         <div className="absolute top-6 right-8 z-10">

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Server, Activity, Cpu, HardDrive, Zap, Terminal, Copy, Puzzle,
-  Play, Square, RotateCw, Clock, Database, FileEdit, Settings,
+  Play, Square, RotateCw, Clock, Database, FileEdit,
   Sunrise, Sun, Moon, TrendingUp
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -14,6 +14,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import PerformanceMonitor from '../components/performance/PerformanceMonitor';
 import InstallServerDialog from '../components/server/InstallServerDialog';
 import CloneOptionsModal from '../components/server/CloneOptionsModal';
+import SponsorBanner from '../components/ui/SponsorBanner';
 import { Server as ServerType } from '../types';
 
 export default function Dashboard() {
@@ -170,12 +171,11 @@ export default function Dashboard() {
   const quickActions = [
     { name: 'Deploy Server', icon: Zap, path: null, action: () => setShowInstallDialog(true), color: 'sky', shortcut: 'D' },
     { name: 'Server Manager', icon: Server, path: '/servers', action: null, color: 'emerald', shortcut: 'S' },
-    { name: 'Visual Settings', icon: Settings, path: '/visual-settings', action: null, color: 'violet', shortcut: 'V' },
+    { name: 'Config Editor', icon: FileEdit, path: '/config', action: null, color: 'violet', shortcut: 'C' },
     { name: 'RCON Console', icon: Terminal, path: '/rcon', action: null, color: 'cyan', shortcut: 'R' },
     { name: 'Mod Manager', icon: Puzzle, path: '/mods', action: null, color: 'pink', shortcut: 'M' },
     { name: 'Backups', icon: Database, path: '/backups', action: null, color: 'amber', shortcut: 'B' },
     { name: 'Scheduler', icon: Clock, path: '/scheduler', action: null, color: 'rose', shortcut: 'T' },
-    { name: 'Config Editor', icon: FileEdit, path: '/config', action: null, color: 'teal', shortcut: 'C' },
   ];
 
   return (
@@ -213,6 +213,9 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Sponsor Banner */}
+      <SponsorBanner />
 
       {/* Stats Grid - 6 Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">

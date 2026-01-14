@@ -4,6 +4,8 @@ import { getSetting, setSetting } from '../utils/tauri';
 import toast from 'react-hot-toast';
 import { invoke } from '@tauri-apps/api/core';
 import DiagnosticsPanel from '../components/settings/DiagnosticsPanel';
+import PortValidator from '../components/settings/PortValidator';
+import PortForwardingGuide from '../components/settings/PortForwardingGuide';
 import { manualCheckForUpdates, getCurrentVersion } from '../components/UpdateChecker';
 import {
     getUpdateSettings,
@@ -441,37 +443,14 @@ export default function Settings() {
                         </div>
                     </div>
 
-                    {/* Port Forwarding */}
+                    {/* Port Status Checker */}
                     <div className="glass-panel rounded-2xl p-6">
-                        <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-                            <span className="bg-green-500/10 p-2 rounded-lg text-green-400">🕸️</span>
-                            Port Forwarding (Router)
-                        </h2>
-                        <div className="space-y-4">
-                            <p className="text-slate-400">
-                                If you want friends outside your local network to join, you must forward ports on your router.
-                            </p>
+                        <PortValidator />
+                    </div>
 
-                            <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-4">
-                                <h3 className="font-semibold text-white mb-2">Instructions</h3>
-                                <ol className="list-decimal list-inside space-y-2 text-sm text-slate-300">
-                                    <li>Find your router IP (usually <span className="text-sky-400 font-mono">192.168.1.1</span> or similar).</li>
-                                    <li>Log in to your router admin panel.</li>
-                                    <li>Find "Port Forwarding" or "NAT" settings.</li>
-                                    <li>Create a new rule for your PC's local IP Address (e.g., 192.168.1.50).</li>
-                                    <li>Add the same ports as the Firewall: <span className="text-sky-400 font-mono">7777, 7778, 27015, 27020</span>.</li>
-                                    <li>Save and Restart the router if necessary.</li>
-                                </ol>
-                            </div>
-
-                            <button
-                                onClick={() => openUrl('https://portforward.com')}
-                                className="inline-flex items-center space-x-2 text-sky-400 hover:text-sky-300 transition-colors"
-                            >
-                                <ExternalLink className="w-4 h-4" />
-                                <span>Specific Router Guides (PortForward.com)</span>
-                            </button>
-                        </div>
+                    {/* Port Forwarding Guide */}
+                    <div className="glass-panel rounded-2xl p-6">
+                        <PortForwardingGuide />
                     </div>
                 </div>
             ) : activeTab === 'updates' ? (

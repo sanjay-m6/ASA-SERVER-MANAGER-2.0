@@ -54,6 +54,7 @@ export interface InstallServerParams {
     queryPort: number;
     rconPort: number;
     pveMode?: boolean; // true = PvE, false = PvP
+    crossplay?: boolean; // true = Enable crossplay for PC/Console players
 }
 
 export async function installServer(params: InstallServerParams): Promise<Server> {

@@ -549,6 +549,45 @@ export default function InstallServerDialog({ onClose }: Props) {
                                             </button>
                                         </div>
                                     </div>
+
+                                    {/* Crossplay Toggle */}
+                                    <div>
+                                        <label className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-3">
+                                            <Globe className="w-4 h-4" />
+                                            Crossplay
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setFormData({ ...formData, crossplay: false })}
+                                                className={`flex-1 flex items-center justify-center gap-3 px-4 py-4 rounded-xl border-2 transition-all ${formData.crossplay !== true
+                                                    ? 'bg-slate-500/20 border-slate-500 text-slate-300'
+                                                    : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:border-slate-600'
+                                                    }`}
+                                            >
+                                                <span className="text-2xl">🖥️</span>
+                                                <div className="text-left">
+                                                    <div className="font-bold">PC Only</div>
+                                                    <div className="text-xs opacity-70">Steam/Epic</div>
+                                                </div>
+                                            </button>
+                                            <button
+                                                onClick={() => setFormData({ ...formData, crossplay: true })}
+                                                className={`flex-1 flex items-center justify-center gap-3 px-4 py-4 rounded-xl border-2 transition-all ${formData.crossplay === true
+                                                    ? 'bg-purple-500/20 border-purple-500 text-purple-400'
+                                                    : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:border-slate-600'
+                                                    }`}
+                                            >
+                                                <span className="text-2xl">🎮</span>
+                                                <div className="text-left">
+                                                    <div className="font-bold">Crossplay</div>
+                                                    <div className="text-xs opacity-70">PC + Console</div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-slate-500 mt-2">
+                                            🎮 Enable crossplay to allow Xbox, PlayStation, and PC players to join together
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         )}

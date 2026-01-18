@@ -166,6 +166,15 @@ export const GAME_USER_SETTINGS_SCHEMA: ConfigGroup[] = [
                 max: 65535,
                 step: 1,
                 description: 'Port for RCON connections (default: 27020)'
+            },
+            {
+                section: 'ServerSettings',
+                key: 'ServerCrossplay',
+                label: 'Enable Crossplay',
+                type: 'boolean',
+                defaultValue: 'False',
+                description: 'Allow Xbox, PlayStation, and PC (Epic/Steam) players to join together. Requires the server to use Epic/Xbox crossplay binaries.',
+                wikiLink: 'https://ark.wiki.gg/wiki/Server_configuration#ServerSettings'
             }
         ]
     },
@@ -825,14 +834,6 @@ export const GAME_USER_SETTINGS_SCHEMA: ConfigGroup[] = [
                 type: 'boolean',
                 defaultValue: 'False',
                 description: 'Allow multiple C4 on same structure'
-            },
-            {
-                section: 'ServerSettings',
-                key: 'EnablePvPGamma',
-                label: 'Enable PvP Gamma',
-                type: 'boolean',
-                defaultValue: 'False',
-                description: 'Allow gamma in PvP'
             },
             {
                 section: 'ServerSettings',

@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Save, Loader2, Search, Sliders, ExternalLink, FileText, Copy, Check, RotateCcw, AlertTriangle, GraduationCap, BarChart3 } from 'lucide-react';
 import { cn } from '../utils/helpers';
-import { readConfig, saveConfig } from '../utils/tauri';
+import { readConfig, saveConfig, updateServerSettings } from '../utils/tauri';
 import toast from 'react-hot-toast';
 import { useServerStore } from '../stores/serverStore';
 import { useLocation } from 'react-router-dom';
@@ -28,7 +28,8 @@ const ConfigInput = ({
     isModified?: boolean,
     onReset?: () => void
 }) => {
-    const Label = () => (
+    // Inline label JSX to avoid recreating component on each render
+    const labelContent = (
         <ConfigTooltip
             label={field.label}
             description={field.description}
@@ -56,15 +57,12 @@ const ConfigInput = ({
         </ConfigTooltip>
     );
 
-    const Container = ({ children }: { children: React.ReactNode }) => (
-        <div className={cn(
-            "bg-slate-800/50 p-4 rounded-lg border transition-all duration-300",
-            isModified
-                ? "border-orange-500/30 bg-orange-500/5 hover:border-orange-500/50"
-                : "border-slate-700/50 hover:border-cyan-500/30"
-        )}>
-            {children}
-        </div>
+    // Container classes computed inline
+    const containerClassName = cn(
+        "bg-slate-800/50 p-4 rounded-lg border transition-all duration-300",
+        isModified
+            ? "border-orange-500/30 bg-orange-500/5 hover:border-orange-500/50"
+            : "border-slate-700/50 hover:border-cyan-500/30"
     );
 
     switch (field.type) {
@@ -100,16 +98,16 @@ const ConfigInput = ({
             );
         case 'boolean':
             return (
-                <Container>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <Label />
+                <div className={containerClassName}>
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                            {labelContent}
                             {field.description && <div className="text-sm text-slate-400">{field.description}</div>}
                         </div>
                         <button
                             onClick={() => onChange(value.toLowerCase() === 'true' ? 'False' : 'True')}
                             className={cn(
-                                "relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500",
+                                "relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 flex-shrink-0 mt-1",
                                 value.toLowerCase() === 'true' ? "bg-cyan-600" : "bg-slate-700"
                             )}
                         >
@@ -121,12 +119,12 @@ const ConfigInput = ({
                             />
                         </button>
                     </div>
-                </Container>
+                </div>
             );
         case 'dropdown':
             return (
-                <Container>
-                    <Label />
+                <div className={containerClassName}>
+                    {labelContent}
                     <select
                         value={value}
                         onChange={(e) => onChange(e.target.value)}
@@ -137,7 +135,7 @@ const ConfigInput = ({
                         ))}
                     </select>
                     {field.description && <div className="mt-2 text-sm text-slate-400">{field.description}</div>}
-                </Container>
+                </div>
             );
         case 'array':
             return (
@@ -158,8 +156,8 @@ const ConfigInput = ({
         case 'textarea':
             return (
                 <div className="col-span-1 md:col-span-2 lg:col-span-2">
-                    <Container>
-                        <Label />
+                    <div className={containerClassName}>
+                        {labelContent}
                         <textarea
                             value={value}
                             onChange={(e) => onChange(e.target.value)}
@@ -167,13 +165,13 @@ const ConfigInput = ({
                             placeholder="Enter values, one per line..."
                         />
                         {field.description && <div className="mt-2 text-sm text-slate-400">{field.description}</div>}
-                    </Container>
+                    </div>
                 </div>
             );
         default:
             return (
-                <Container>
-                    <Label />
+                <div className={containerClassName}>
+                    {labelContent}
                     <input
                         type={field.type === 'number' ? 'number' : 'text'}
                         value={value}
@@ -181,7 +179,7 @@ const ConfigInput = ({
                         className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white focus:ring-1 focus:ring-cyan-500 outline-none font-mono"
                     />
                     {field.description && <div className="mt-2 text-sm text-slate-400">{field.description}</div>}
-                </Container>
+                </div>
             );
     }
 };
@@ -344,15 +342,69 @@ export default function ConfigEditor() {
             let gusString = rawText.gus;
             let gameString = rawText.game;
 
+            // Get parsed configs for extracting values
+            let parsedConfigs = configs;
             if (viewMode === 'visual') {
                 gusString = generateIniContent(configs.GameUserSettings);
                 gameString = generateIniContent(configs.Game);
+            } else {
+                // Parse raw text to get current values
+                parsedConfigs = {
+                    GameUserSettings: parseIniContent(rawText.gus),
+                    Game: parseIniContent(rawText.game)
+                };
             }
 
+            // Save INI files
             await Promise.all([
                 saveConfig(selectedServerId, 'GameUserSettings', gusString),
                 saveConfig(selectedServerId, 'Game', gameString)
             ]);
+
+            // Extract critical settings from the parsed configs and sync to database
+            // This ensures settings are always saved even if INI parsing in backend fails
+            const serverSettings = parsedConfigs.GameUserSettings.get('ServerSettings');
+            const urlSettings = parsedConfigs.GameUserSettings.get('URL');
+
+            const updateParams: Parameters<typeof updateServerSettings>[0] = {
+                serverId: selectedServerId
+            };
+
+            // Map name
+            const mapName = serverSettings?.get('MapName');
+            if (mapName) updateParams.mapName = mapName;
+
+            // Session name
+            const sessionName = serverSettings?.get('ServerName') || serverSettings?.get('SessionName');
+            if (sessionName) updateParams.sessionName = sessionName;
+
+            // Max players
+            const maxPlayers = serverSettings?.get('MaxPlayers');
+            if (maxPlayers) updateParams.maxPlayers = parseInt(maxPlayers);
+
+            // Passwords
+            const serverPassword = serverSettings?.get('ServerPassword');
+            if (serverPassword !== undefined) updateParams.serverPassword = serverPassword;
+
+            const adminPassword = serverSettings?.get('ServerAdminPassword');
+            if (adminPassword) updateParams.adminPassword = adminPassword;
+
+            // Ports from URL section
+            const gamePort = urlSettings?.get('Port');
+            if (gamePort) updateParams.gamePort = parseInt(gamePort);
+
+            const queryPort = urlSettings?.get('QueryPort');
+            if (queryPort) updateParams.queryPort = parseInt(queryPort);
+
+            // RCON port from ServerSettings
+            const rconPort = serverSettings?.get('RCONPort');
+            if (rconPort) updateParams.rconPort = parseInt(rconPort);
+
+            // Sync critical settings to database
+            await updateServerSettings(updateParams);
+
+            // Refresh servers list to reflect updates in UI
+            useServerStore.getState().refreshServers();
 
             toast.success('All configurations saved successfully');
         } catch (err) {
